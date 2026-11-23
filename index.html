@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E0F11">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Downhill-Läufe aufzeichnen: Speed, Airtime, Bestzeiten, Fahrwerk-Setup und Sturzerkennung.">
+<title>Gravity – Downhill</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css?v=1">
+</head>
+<body>
+<main id="app">
+
+  <!-- LIVE -->
+  <section id="view-live" class="view active" aria-labelledby="h-live">
+    <header class="top">
+      <div class="col">
+        <label for="trail" class="eyebrow">Trail</label>
+        <input id="trail" class="trail-input" list="trail-list" placeholder="Trail wählen oder eingeben" autocomplete="off">
+        <datalist id="trail-list"></datalist>
+      </div>
+      <div id="rec" class="pill" hidden><span class="dot" aria-hidden="true"></span>Aufnahme</div>
+    </header>
+    <h1 id="h-live" class="sr-only">Live-Lauf</h1>
+
+    <div class="speed">
+      <span id="speed" class="big">0</span>
+      <span class="sub">km/h · Vmax <span id="vmax">0</span></span>
+    </div>
+
+    <div class="grid3">
+      <div class="card stat"><span class="lbl">Zeit</span><span id="time" class="val">0:00.0</span></div>
+      <div class="card stat"><span class="lbl">Tiefenmeter</span><span id="drop" class="val">0 m</span></div>
+      <div class="card stat"><span class="lbl">Airtime</span><span id="air" class="val">0,0 s</span></div>
+      <div class="card stat"><span class="lbl">Strecke</span><span id="dist" class="val">0,00 km</span></div>
+      <div class="card stat"><span class="lbl">Sprünge</span><span id="jumps" class="val">0</span></div>
+      <div class="card stat"><span class="lbl">Bestzeit</span><span id="best" class="val">–</span></div>
+    </div>
+
+    <p id="gps-state" class="hint">GPS: noch nicht gestartet</p>
+
+    <button id="btn-run" class="btn primary big-btn">Lauf starten</button>
+    <p class="hint small">Tipp: Bildschirm bleibt während des Laufs an. Handy fest verstauen (z. B. Rucksack-Brustgurt), sonst zählt jeder Wackler.</p>
+  </section>
+
+  <!-- LÄUFE -->
+  <section id="view-runs" class="view" aria-labelledby="h-runs">
+    <header class="top"><h1 id="h-runs" class="title">Läufe</h1></header>
+    <div id="bests"></div>
+    <h2 class="h2">Verlauf</h2>
+    <div id="run-list" class="list"></div>
+  </section>
+
+  <!-- SETUP -->
+  <section id="view-setup" class="view" aria-labelledby="h-setup">
+    <header class="top">
+      <h1 id="h-setup" class="title">Setup</h1>
+      <label class="sr-only" for="bike-name">Bike</label>
+      <input id="bike-name" class="bike-input" placeholder="Dein Bike">
+    </header>
+
+    <div class="seg" role="tablist" aria-label="Federelement">
+      <button role="tab" id="tab-fork" aria-selected="true" class="seg-btn on">Gabel</button>
+      <button role="tab" id="tab-shock" aria-selected="false" class="seg-btn">Dämpfer</button>
+    </div>
+
+    <div class="card sag">
+      <svg id="sag-ring" width="110" height="110" viewBox="0 0 110 110" role="img" aria-label="SAG">
+        <circle cx="55" cy="55" r="46" fill="none" stroke="#2C2F33" stroke-width="10"/>
+        <circle id="sag-arc" cx="55" cy="55" r="46" fill="none" stroke="#C6FF3D" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 289" transform="rotate(-90 55 55)"/>
+        <text id="sag-txt" x="55" y="62" text-anchor="middle" fill="#F2F3F0" font-size="26" font-weight="700" font-family="Space Grotesk, sans-serif">–</text>
+      </svg>
+      <div class="col gap6">
+        <span class="lbl">SAG-Rechner</span>
+        <div class="row gap8">
+          <label class="mini">Federweg (mm)<input id="sag-travel" type="number" inputmode="decimal" min="0"></label>
+          <label class="mini">Eingefedert (mm)<input id="sag-sag" type="number" inputmode="decimal" min="0"></label>
+        </div>
+        <span id="sag-hint" class="hint small"></span>
+      </div>
+    </div>
+
+    <div id="setup-rows" class="card rows"></div>
+
+    <label class="card notes">
+      <span class="lbl">Notizen (Reifendruck, Strecke, Gefühl …)</span>
+      <textarea id="setup-notes" rows="3"></textarea>
+    </label>
+    <p class="hint small">Wird automatisch auf diesem Gerät gespeichert.</p>
+  </section>
+
+  <!-- SICHERHEIT -->
+  <section id="view-safety" class="view" aria-labelledby="h-safety">
+    <header class="top"><h1 id="h-safety" class="title">Sicherheit</h1></header>
+
+    <div class="card col gap12">
+      <div class="row between">
+        <label for="crash-on" class="strong">Sturzerkennung</label>
+        <input id="crash-on" type="checkbox" class="switch">
+      </div>
+      <p class="hint small">Erkennt während eines Laufs einen harten Aufprall mit anschließendem Stillstand. Dann klingelt das Handy 30 Sekunden lang. Reagierst du nicht, öffnet die App eine fertige SMS mit deinem Standort an deinen Notfallkontakt.</p>
+      <label class="mini">Empfindlichkeit
+        <select id="crash-g">
+          <option value="3">Hoch (ab 3 g)</option>
+          <option value="4">Mittel (ab 4 g)</option>
+          <option value="5">Niedrig (ab 5 g)</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="card col gap12">
+      <span class="strong">Notfallkontakt</span>
+      <label class="mini">Name<input id="c-name" autocomplete="name"></label>
+      <label class="mini">Handynummer<input id="c-phone" type="tel" autocomplete="tel" placeholder="+49 …"></label>
+    </div>
+
+    <button id="btn-test" class="btn ghost">Alarm testen</button>
+
+    <div class="card warn">
+      <strong>Wichtig:</strong> Eine Web-App kann nicht selbst anrufen oder SMS verschicken. Sie bereitet die Nachricht vor, abschicken musst du (oder jemand anderes) sie selbst. Bei gesperrtem Bildschirm kann der Browser die Sensoren pausieren. Verlass dich also nicht allein darauf, und fahr möglichst nicht allein.
+    </div>
+
+    <div class="card col gap6">
+      <span class="strong">Crew-Live-Karte</span>
+      <span class="hint small">Kommt als Nächstes: Freunde live auf der Karte sehen und bei einem Sturz automatisch benachrichtigen. Dafür braucht die App einen Server.</span>
+    </div>
+  </section>
+
+  <nav class="tabs" aria-label="Hauptnavigation">
+    <button data-view="live" class="tab on" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Live</button>
+    <button data-view="runs" class="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V10M12 20V4M18 20v-7"/></svg>Läufe</button>
+    <button data-view="setup" class="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>Setup</button>
+    <button data-view="safety" class="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Sicherheit</button>
+  </nav>
+</main>
+
+<!-- Alarm-Overlay -->
+<div id="alarm" class="overlay" hidden role="alertdialog" aria-labelledby="alarm-h" aria-describedby="alarm-p">
+  <div class="alarm-box">
+    <svg viewBox="0 0 24 24" class="alarm-ico" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/></svg>
+    <h2 id="alarm-h">Sturz erkannt?</h2>
+    <p id="alarm-p">Wenn du nicht reagierst, wird in <strong id="alarm-count">30</strong> s die Notfall-SMS vorbereitet.</p>
+    <button id="btn-ok" class="btn primary big-btn">Mir geht's gut</button>
+    <a id="btn-sms" class="btn danger" href="#">SMS an Notfallkontakt</a>
+    <a class="btn ghost" href="tel:112">112 anrufen</a>
+  </div>
+</div>
+
+<!-- Lauf-Detail -->
+<div id="detail" class="overlay sheet" hidden role="dialog" aria-labelledby="detail-h">
+  <div class="sheet-box">
+    <div class="row between">
+      <h2 id="detail-h" class="title small-title"></h2>
+      <button id="detail-close" class="icon-btn" aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div id="detail-body"></div>
+    <div class="row gap8">
+      <button id="detail-share" class="btn ghost flex1">Teilen</button>
+      <button id="detail-del" class="btn ghost flex1 danger-text">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=1"></script>
+</body>
+</html>
