@@ -1,7 +1,8 @@
 // Gravity – Offline-Zwischenspeicher
 // Bei jeder neuen App-Fassung die Kennung hochzählen (v2, v3, ...).
-const CACHE = "gravity-v5";
-const DATEIEN = ["./", "./index.html", "./app.css?v=4", "./app.js?v=4", "./parks.js?v=4", "./crew.js?v=5", "./manifest.json",
+const CACHE = "gravity-v6";
+const DATEIEN = ["./", "./index.html", "./app.css?v=5", "./app.js?v=5", "./parks.js?v=5", "./crew.js?v=6", "./account.js?v=5", "./manifest.json",
+  "./datenschutz.html", "./nutzungsbedingungen.html", "./impressum.html",
   "./icon-180.png", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png"];
 
 self.addEventListener("install", (e) => {

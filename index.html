@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=4">
+<link rel="stylesheet" href="app.css?v=5">
 </head>
 <body>
 <main id="app">
@@ -27,6 +27,7 @@
           <svg viewBox="0 0 24 24" class="chev" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
       </button>
       <div id="rec" class="pill" hidden><span class="dot" aria-hidden="true"></span>Aufnahme</div>
+      <div id="armed" class="pill" hidden><span class="dot dot-armed" aria-hidden="true"></span>Auto bereit</div>
     </header>
     <button id="near-hint" class="near" hidden></button>
     <h1 id="h-live" class="sr-only">Live-Lauf</h1>
@@ -45,7 +46,14 @@
       <div class="card stat"><span class="lbl">Bestzeit</span><span id="best" class="val">–</span></div>
     </div>
 
+    <div id="sectors" class="card col gap8" hidden></div>
+
     <p id="gps-state" class="hint">GPS: noch nicht gestartet</p>
+
+    <div class="card row between gap12">
+      <div class="col"><label for="auto-on" class="strong">Auto-Start/Stopp</label><span id="auto-hint" class="lbl"></span></div>
+      <input id="auto-on" type="checkbox" class="switch">
+    </div>
 
     <button id="btn-run" class="btn primary big-btn">Lauf starten</button>
     <p class="hint small">Tipp: Bildschirm bleibt während des Laufs an. Handy fest verstauen (z. B. Rucksack-Brustgurt), sonst zählt jeder Wackler.</p>
@@ -88,9 +96,11 @@
   <!-- LÄUFE -->
   <section id="view-runs" class="view" aria-labelledby="h-runs">
     <header class="top"><h1 id="h-runs" class="title">Läufe</h1></header>
+    <div id="account-card"></div>
     <div id="bests"></div>
     <h2 class="h2">Verlauf</h2>
     <div id="run-list" class="list"></div>
+      <nav class="legal-links" aria-label="Rechtliches"><a href="datenschutz.html">Datenschutz</a><a href="nutzungsbedingungen.html">Nutzungsbedingungen</a><a href="impressum.html">Impressum</a></nav>
   </section>
 
   <!-- SETUP -->
@@ -145,12 +155,14 @@
         <span class="strong">Crew beitreten</span>
         <label class="mini">Crew-Code<input id="join-code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="z. B. 5W8P2X" required></label>
         <label class="mini">Dein Name<input id="join-name" maxlength="30" autocomplete="nickname" required></label>
+        <label class="check"><input class="crew-consent" type="checkbox" required> <span>Ich willige ein, dass mein Name und – solange ich teile oder bei einem Sturz-Alarm – mein Standort an meine Crew übertragen werden (<a href="datenschutz.html" target="_blank">Datenschutz</a>).</span></label>
         <button class="btn primary">Beitreten</button>
       </form>
       <form id="crew-create-form" class="card col gap12">
         <span class="strong">Neue Crew erstellen</span>
         <label class="mini">Name der Crew<input id="create-crew" maxlength="40" placeholder="z. B. Sonntagsrunde" required></label>
         <label class="mini">Dein Name<input id="create-name" maxlength="30" autocomplete="nickname" required></label>
+        <label class="check"><input class="crew-consent" type="checkbox" required> <span>Ich willige ein, dass mein Name und – solange ich teile oder bei einem Sturz-Alarm – mein Standort an meine Crew übertragen werden (<a href="datenschutz.html" target="_blank">Datenschutz</a>).</span></label>
         <button class="btn ghost">Crew erstellen</button>
       </form>
       <p id="crew-err" class="hint small danger-text" role="alert"></p>
@@ -212,6 +224,7 @@
     </div>
 
     <p class="hint small">Crew-Daten liegen auf einem Server in Frankfurt (Supabase). Gespeichert werden nur dein Anzeigename und, solange du teilst, deine letzte Position. Positionen werden nach 24 Stunden ohne Aktualisierung gelöscht. Karte: © OpenStreetMap-Mitwirkende.</p>
+      <nav class="legal-links" aria-label="Rechtliches"><a href="datenschutz.html">Datenschutz</a><a href="nutzungsbedingungen.html">Nutzungsbedingungen</a><a href="impressum.html">Impressum</a></nav>
   </section>
 
   <nav class="tabs" aria-label="Hauptnavigation">
@@ -252,6 +265,28 @@
   </div>
 </div>
 
+<!-- Rangliste -->
+<div id="rank" class="overlay sheet" hidden role="dialog" aria-labelledby="rank-h">
+  <div class="sheet-box">
+    <div class="row between">
+      <div class="col"><span class="eyebrow">Rangliste</span><h2 id="rank-h" class="title small-title"></h2></div>
+      <button id="rank-close" class="icon-btn" aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div id="rank-body"></div>
+  </div>
+</div>
+
+<!-- Konto -->
+<div id="acct" class="overlay sheet" hidden role="dialog" aria-labelledby="acct-h">
+  <div class="sheet-box">
+    <div class="row between">
+      <h2 id="acct-h" class="title small-title">Konto</h2>
+      <button id="acct-close" class="icon-btn" aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div id="acct-body"></div>
+  </div>
+</div>
+
 <!-- Lauf-Detail -->
 <div id="detail" class="overlay sheet" hidden role="dialog" aria-labelledby="detail-h">
   <div class="sheet-box">
@@ -259,7 +294,9 @@
       <h2 id="detail-h" class="title small-title"></h2>
       <button id="detail-close" class="icon-btn" aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
+    <div id="detail-map" class="detail-map" hidden aria-label="Gefahrene Linie"></div>
     <div id="detail-body"></div>
+    <button id="detail-rank" class="btn ghost">Rangliste dieser Strecke</button>
     <div class="row gap8">
       <button id="detail-share" class="btn ghost flex1">Teilen</button>
       <button id="detail-del" class="btn ghost flex1 danger-text">Löschen</button>
@@ -267,8 +304,9 @@
   </div>
 </div>
 
-<script src="parks.js?v=4"></script>
-<script src="app.js?v=4"></script>
-<script src="crew.js?v=5"></script>
+<script src="parks.js?v=5"></script>
+<script src="app.js?v=5"></script>
+<script src="crew.js?v=6"></script>
+<script src="account.js?v=5"></script>
 </body>
 </html>

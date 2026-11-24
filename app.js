@@ -70,6 +70,7 @@ function renderSel() {
   if (!s) { hint.hidden = false; hint.textContent = "Wähle Park und Strecke, dann zählen deine Bestzeiten pro Trail →"; }
   else hint.hidden = true;
   updateBest();
+  if (typeof renderButtons === "function") { renderButtons(); renderSectors(); }
 }
 function updateBest() {
   const b = bestFor(selKey());
@@ -84,96 +85,222 @@ $("#pick-trail").addEventListener("click", () => {
 });
 $("#near-hint").addEventListener("click", () => show("parks"));
 
-$("#btn-run").addEventListener("click", () => (run.active ? stopRun() : startRun()));
-
-async function startRun() {
-  if (!("geolocation" in navigator)) { alert("Dieses Gerät bietet kein GPS im Browser an."); return; }
-  await askMotionPermission();
-  unlockAudio();
-
-  const trail = selKey();
-  Object.assign(run, {
-    active: true, trail, park: settings.sel && settings.sel.park || "", tname: settings.sel ? settings.sel.trail : "", start: Date.now(), dist: 0, vmax: 0, drop: 0, air: 0, jumps: 0,
-    speed: 0, last: null, altRef: null, points: []
-  });
-  resetMotion();
-
-  watchId = navigator.geolocation.watchPosition(onFix, onGpsError, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
-  timerId = setInterval(renderLive, 100);
-  requestWakeLock();
-
-  $("#btn-run").textContent = "Lauf beenden";
-  $("#btn-run").className = "btn stop big-btn";
-  $("#rec").hidden = false;
-  $("#pick-trail").disabled = true;
-  $("#gps-state").textContent = "GPS: suche Signal …";
-  renderLive();
+// ---------- Referenz für Strecke: Start, Ziel, Sektorpunkte aus der besten Fahrt mit GPS-Spur ----------
+function refFor(key) {
+  const withTrack = runs.filter((r) => r.trail === key && r.track && r.track.length >= 10);
+  if (!withTrack.length) return null;
+  const best = withTrack.reduce((b, r) => (r.dur < b.dur ? r : b));
+  const tr = best.track;
+  const cum = [0];
+  for (let i = 1; i < tr.length; i++) cum.push(cum[i - 1] + haversine({ lat: tr[i - 1][0], lon: tr[i - 1][1] }, { lat: tr[i][0], lon: tr[i][1] }));
+  const total = cum[cum.length - 1];
+  if (total < 150) return null;
+  const at = (f) => { const d = total * f; const i = cum.findIndex((c) => c >= d); return { lat: tr[i][0], lon: tr[i][1] }; };
+  return {
+    start: { lat: tr[0][0], lon: tr[0][1] }, end: { lat: tr[tr.length - 1][0], lon: tr[tr.length - 1][1] },
+    splits: [at(1 / 3), at(2 / 3)], bestSectors: best.sectors || null, bestDur: best.dur
+  };
 }
 
-function stopRun() {
-  if (!run.active) return;
-  run.active = false;
+// ---------- Aufnahme: manuell oder automatisch ----------
+// Zustände: idle → (armed: GPS an, wartet auf Start) → active → idle/armed
+const autoInput = $("#auto-on");
+autoInput.checked = !!settings.auto;
+autoInput.addEventListener("change", () => {
+  settings.auto = autoInput.checked; saveSettings();
+  if (!settings.auto && run.armed && !run.active) disarm();
+  renderButtons();
+});
+$("#btn-run").addEventListener("click", async () => {
+  if (run.active) { finishRun(Date.now()); return; }
+  if (run.armed) { disarm(); return; }
+  if (settings.auto) await arm(); else await beginManual();
+});
+
+async function prepareSensors() {
+  if (!("geolocation" in navigator)) { alert("Dieses Gerät bietet kein GPS im Browser an."); return false; }
+  if (!settings.safetyOk) {
+    const ok = confirm("Bevor es losgeht:\n\n• Du fährst auf eigenes Risiko – Zeiten und Ranglisten sind kein Grund, über dein Limit zu gehen.\n• Bedien die App nicht während der Fahrt.\n• Sturzerkennung und Crew-Alarm sind Hilfen ohne Garantie und ersetzen keinen Notruf (112).\n\nEinzelheiten in den Nutzungsbedingungen (Tab Läufe, ganz unten). Verstanden?");
+    if (!ok) return false;
+    settings.safetyOk = true; saveSettings();
+  }
+  await askMotionPermission();
+  unlockAudio();
+  return true;
+}
+function startGps() {
+  if (watchId === null) watchId = navigator.geolocation.watchPosition(onFix, onGpsError, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+  requestWakeLock();
+}
+function stopGps() {
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = null;
-  clearInterval(timerId);
   releaseWakeLock();
-
-  $("#btn-run").textContent = "Lauf starten";
-  $("#btn-run").className = "btn primary big-btn";
-  $("#rec").hidden = true;
-  $("#pick-trail").disabled = false;
+}
+async function beginManual() {
+  if (!(await prepareSensors())) return;
+  startGps();
+  beginRun(Date.now());
+}
+async function arm() {
+  if (!(await prepareSensors())) return;
+  run.armed = true; run.ref = refFor(selKey()); run.slow = 0; run.fast = 0; run.prevArm = null;
+  startGps();
+  $("#gps-state").textContent = run.ref ? "Auto: fahr zum Start der Strecke …" : "Auto: Start, sobald du losfährst (ab 15 km/h bergab) …";
+  renderButtons();
+}
+function disarm() {
+  run.armed = false;
+  if (!run.active) stopGps();
+  $("#gps-state").textContent = "Auto-Modus aus.";
+  renderButtons();
+}
+function beginRun(t0) {
+  const trail = selKey();
+  Object.assign(run, {
+    active: true, trail, park: settings.sel && settings.sel.park || "", tname: settings.sel ? settings.sel.trail : "",
+    start: t0, dist: 0, vmax: 0, drop: 0, air: 0, jumps: 0, speed: 0, last: null, altRef: null,
+    track: [], sectors: [], nextSplit: 0, slowSince: 0, ref: refFor(trail)
+  });
+  resetMotion();
+  clearInterval(timerId);
+  timerId = setInterval(renderLive, 100);
+  renderSectors();
+  renderButtons();
+  renderLive();
+  if (navigator.vibrate) navigator.vibrate(150);
+}
+function finishRun(t1) {
+  if (!run.active) return;
+  run.active = false;
+  clearInterval(timerId);
+  if (!run.armed) stopGps();
   $("#speed").textContent = "0";
+  renderButtons();
 
-  const dur = Date.now() - run.start;
+  const dur = t1 - run.start;
   if (dur < 5000) { $("#gps-state").textContent = "Lauf zu kurz – nicht gespeichert."; return; }
   const prevBest = bestFor(run.trail);
   const rec = {
     id: String(run.start), trail: run.trail, park: run.park, tname: run.tname, start: run.start, dur,
     dist: Math.round(run.dist), vmax: run.vmax, drop: Math.round(run.drop),
-    air: run.air, jumps: run.jumps
+    air: run.air, jumps: run.jumps,
+    track: run.track.length >= 2 ? run.track : null,
+    sectors: run.ref && run.sectors.length === 2 ? [run.sectors[0], run.sectors[1], dur] : null
   };
   runs.unshift(rec);
   saveRuns();
-  fillTrailList();
   updateBest();
-  $("#gps-state").textContent = "Lauf gespeichert.";
+  renderSectors();
+  if (window.Account) Account.runSaved(rec);
+  if (navigator.vibrate) navigator.vibrate([150, 80, 150]);
+  $("#gps-state").textContent = run.armed ? "Lauf gespeichert. Auto wartet auf den nächsten Start …" : "Lauf gespeichert.";
+  if (run.armed) { run.ref = refFor(selKey()); run.slow = 0; run.fast = 0; }
   openDetail(rec, !prevBest || dur < prevBest.dur ? (prevBest ? prevBest.dur - dur : -1) : null);
+}
+// Für alte Aufrufe
+const stopRun = () => finishRun(Date.now());
+
+function renderButtons() {
+  const b = $("#btn-run");
+  if (run.active) { b.textContent = "Lauf beenden"; b.className = "btn stop big-btn"; }
+  else if (run.armed) { b.textContent = "Auto-Modus beenden"; b.className = "btn ghost big-btn"; }
+  else { b.textContent = settings.auto ? "Auto-Modus starten" : "Lauf starten"; b.className = "btn primary big-btn"; }
+  $("#rec").hidden = !run.active;
+  $("#armed").hidden = !(run.armed && !run.active);
+  $("#pick-trail").disabled = run.active || run.armed;
+  autoInput.disabled = run.active;
+  const ref = refFor(selKey());
+  $("#auto-hint").textContent = ref
+    ? "Startet und stoppt an Start und Ziel deiner bisherigen Fahrt auf dieser Strecke."
+    : "Startet ab 15 km/h bergab, stoppt nach 15 s Stillstand. Nach dem ersten Lauf erkennt die App Start und Ziel.";
 }
 
 function onFix(p) {
   const c = p.coords;
   const now = p.timestamp || Date.now();
   const fix = { lat: c.latitude, lon: c.longitude, t: now, acc: c.accuracy };
+  const prev = lastFix;
   lastFix = fix;
-  if (window.Crew) Crew.fix(fix, run.active ? run.speed : null);
-  $("#gps-state").textContent = "GPS: ±" + Math.round(c.accuracy) + " m";
+  let v = (typeof c.speed === "number" && !isNaN(c.speed)) ? c.speed : null;
+  if (v === null && prev) { const dt = (now - prev.t) / 1000; if (dt > 0) v = haversine(prev, fix) / dt; }
+  const kmh = v === null ? null : v * 3.6;
+  if (window.Crew) Crew.fix(fix, run.active ? run.speed : kmh);
+  $("#gps-state").textContent = (run.armed && !run.active ? "Auto bereit · " : "") + "GPS: ±" + Math.round(c.accuracy) + " m";
+
+  // Auto-Start
+  if (run.armed && !run.active) {
+    const alt = typeof c.altitude === "number" ? c.altitude : null;
+    const goingDown = alt === null || run.prevArm === null || run.prevArm.alt === null || alt <= run.prevArm.alt + 0.5;
+    run.prevArm = { alt };
+    if (c.accuracy > 30 || kmh === null) return;
+    if (run.ref) {
+      if (haversine(fix, run.ref.start) < 30 && kmh > 8) beginRun(now);
+    } else {
+      run.fast = kmh > 15 && goingDown ? run.fast + 1 : 0;
+      if (run.fast >= 3) beginRun(now - 2000);
+    }
+    if (!run.active) return;
+  }
   if (!run.active) return;
 
-  // Geschwindigkeit
-  let v = (typeof c.speed === "number" && !isNaN(c.speed)) ? c.speed : null;
+  // Strecke, Geschwindigkeit
   if (run.last) {
     const d = haversine(run.last, fix);
-    const dt = (now - run.last.t) / 1000;
     if (c.accuracy <= 30 && d > 1.5) run.dist += d;
-    if (v === null && dt > 0) v = d / dt;
   }
-  if (v !== null) {
-    const kmh = v * 3.6;
+  if (kmh !== null) {
     run.speed = run.speed ? run.speed * 0.4 + kmh * 0.6 : kmh; // leicht geglättet
     if (c.accuracy <= 25 && kmh < 130 && run.speed > run.vmax) run.vmax = run.speed;
   }
-
   // Tiefenmeter mit Schwelle gegen GPS-Rauschen
   if (typeof c.altitude === "number" && !isNaN(c.altitude)) {
     if (run.altRef === null) run.altRef = c.altitude;
     else if (c.altitude < run.altRef - 3) { run.drop += run.altRef - c.altitude; run.altRef = c.altitude; }
     else if (c.altitude > run.altRef + 3) run.altRef = c.altitude;
   }
+  // GPS-Spur (ausgedünnt: mind. 4 m Abstand, max. 3000 Punkte)
+  if (c.accuracy <= 30) {
+    const lastPt = run.track[run.track.length - 1];
+    if (!lastPt || haversine({ lat: lastPt[0], lon: lastPt[1] }, fix) >= 4) {
+      if (run.track.length < 3000) run.track.push([+fix.lat.toFixed(6), +fix.lon.toFixed(6), Math.round((now - run.start) / 100) / 10, Math.round(kmh || 0)]);
+    }
+  }
+  // Sektoren und Auto-Stopp über die Referenz
+  if (run.ref && c.accuracy <= 30) {
+    if (run.nextSplit < 2 && haversine(fix, run.ref.splits[run.nextSplit]) < 25) {
+      run.sectors.push(now - run.start); run.nextSplit++;
+      renderSectors();
+    }
+    if (settings.auto && run.nextSplit >= 2 && haversine(fix, run.ref.end) < 25) { finishRun(now); return; }
+  }
+  // Auto-Stopp ohne Referenz: 15 s Stillstand
+  if (settings.auto && !run.ref && kmh !== null) {
+    if (kmh < 3) { if (!run.slowSince) run.slowSince = now; else if (now - run.slowSince > 15000) { finishRun(run.slowSince); return; } }
+    else run.slowSince = 0;
+  }
   run.last = fix;
 }
 function onGpsError(e) {
   const msg = e.code === 1 ? "GPS: Zugriff verweigert – bitte in den Browser-Einstellungen erlauben." : "GPS: kein Signal";
   $("#gps-state").textContent = msg;
+}
+
+function renderSectors() {
+  const box = $("#sectors");
+  const ref = run.active ? run.ref : refFor(selKey());
+  if (!ref || !ref.bestSectors) { box.hidden = true; return; }
+  box.hidden = false;
+  const best = ref.bestSectors;
+  const mine = run.active ? run.sectors : [];
+  const rows = [0, 1, 2].map((i) => {
+    const prevMine = i ? mine[i - 1] : 0, prevBest = i ? best[i - 1] : 0;
+    const t = mine[i] !== undefined ? mine[i] - prevMine : null;
+    const b = best[i] - prevBest;
+    const delta = t === null ? "" : `<span class="${t <= b ? "good" : "bad"}">${t <= b ? "−" : "+"}${de(Math.abs(t - b) / 1000, 1)}</span>`;
+    return `<div class="row between sec"><span class="lbl">Sektor ${i + 1}</span><span>${t === null ? "–" : fmtTime(t)} ${delta} <span class="lbl">PB ${fmtTime(b)}</span></span></div>`;
+  }).join("");
+  box.innerHTML = `<span class="strong">Sektoren vs. Bestzeit</span>${rows}`;
 }
 
 function renderLive() {
@@ -307,6 +434,7 @@ $("#btn-test").addEventListener("click", () => { unlockAudio(); startAlarm(true)
 
 // ---------- Läufe ----------
 function renderRuns() {
+  if (window.Account) Account.render();
   fillTrailList();
   const byTrail = {};
   runs.forEach((r) => { (byTrail[r.trail] = byTrail[r.trail] || []).push(r); });
@@ -350,16 +478,66 @@ function openDetail(r, gain) {
   $("#detail-body").innerHTML = head + `<div class="grid3" style="margin-top:12px">
     ${stat("Zeit", fmtTime(r.dur))}${stat("Vmax", Math.round(r.vmax) + " km/h")}${stat("Tiefenmeter", r.drop + " m")}
     ${stat("Strecke", de(r.dist / 1000, 2) + " km")}${stat("Airtime", de(r.air, 1) + " s")}${stat("Sprünge", r.jumps)}
-  </div><p class="hint small" style="margin-top:10px">${new Date(r.start).toLocaleString("de-DE")}</p>`;
+  </div>${r.sectors ? `<div class="card col gap8" style="margin-top:12px"><span class="strong">Sektoren</span>${r.sectors.map((t, i) =>
+    `<div class="row between sec"><span class="lbl">Sektor ${i + 1}</span><span>${fmtTime(t - (i ? r.sectors[i - 1] : 0))}</span></div>`).join("")}</div>` : ""}
+  <p class="hint small" style="margin-top:10px">${new Date(r.start).toLocaleString("de-DE")}${r.track ? "" : " · ohne GPS-Spur"}</p>`;
+  $("#detail-rank").hidden = !r.park;
   $("#detail").hidden = false;
   $("#detail-close").focus();
+  drawTrack(r);
 }
+
+// ---------- Karte (Leaflet, nur bei Bedarf geladen) ----------
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (loadLeaflet.p) return loadLeaflet.p;
+  loadLeaflet.p = new Promise((resolve, reject) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    css.integrity = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="; css.crossOrigin = "";
+    document.head.appendChild(css);
+    const js = document.createElement("script");
+    js.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    js.integrity = "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="; js.crossOrigin = "";
+    js.onload = resolve; js.onerror = () => { loadLeaflet.p = null; reject(); };
+    document.head.appendChild(js);
+  });
+  return loadLeaflet.p;
+}
+let detailMap = null, detailLayer = null;
+async function drawTrack(r) {
+  const box = $("#detail-map");
+  if (!r.track || r.track.length < 2) { box.hidden = true; return; }
+  box.hidden = false;
+  try { await loadLeaflet(); } catch (e) { box.hidden = true; return; }
+  if (!detailMap) {
+    detailMap = L.map(box, { zoomControl: false, attributionControl: true });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap-Mitwirkende" }).addTo(detailMap);
+  }
+  if (detailLayer) detailMap.removeLayer(detailLayer);
+  // Linie nach Tempo eingefärbt: langsam blau → schnell lime
+  const vmax = Math.max(10, ...r.track.map((p) => p[3] || 0));
+  const segs = [];
+  for (let i = 1; i < r.track.length; i++) {
+    const a = r.track[i - 1], b = r.track[i];
+    const f = Math.min(1, (b[3] || 0) / vmax);
+    const col = `hsl(${Math.round(215 - f * 140)}, 90%, ${Math.round(55 + f * 10)}%)`;
+    segs.push(L.polyline([[a[0], a[1]], [b[0], b[1]]], { color: col, weight: 5, opacity: 0.95 }));
+  }
+  const s0 = r.track[0], s1 = r.track[r.track.length - 1];
+  segs.push(L.circleMarker([s0[0], s0[1]], { radius: 7, color: "#0E0F11", weight: 2, fillColor: "#F2F3F0", fillOpacity: 1 }).bindTooltip("Start"));
+  segs.push(L.circleMarker([s1[0], s1[1]], { radius: 7, color: "#0E0F11", weight: 2, fillColor: "#EF4444", fillOpacity: 1 }).bindTooltip("Ziel"));
+  detailLayer = L.featureGroup(segs).addTo(detailMap);
+  setTimeout(() => { detailMap.invalidateSize(); detailMap.fitBounds(detailLayer.getBounds(), { padding: [20, 20], maxZoom: 17 }); }, 60);
+}
+$("#detail-rank").addEventListener("click", () => { if (detailRun && window.Account) Account.openRanking(detailRun.trail); });
 $("#detail-close").addEventListener("click", () => { $("#detail").hidden = true; });
 $("#detail").addEventListener("click", (e) => { if (e.target.id === "detail") $("#detail").hidden = true; });
 $("#detail-del").addEventListener("click", () => {
   if (!detailRun || !confirm("Diesen Lauf wirklich löschen?")) return;
   runs = runs.filter((r) => r.id !== detailRun.id);
   saveRuns(); updateBest(); renderRuns();
+  if (window.Account) Account.runDeleted(detailRun.id);
   $("#detail").hidden = true;
 });
 $("#detail-share").addEventListener("click", async () => {
@@ -471,7 +649,7 @@ $("#c-name").addEventListener("input", (e) => { settings.cName = e.target.value.
 $("#c-phone").addEventListener("input", (e) => { settings.cPhone = e.target.value.trim(); saveSettings(); });
 
 // ---------- Bikeparks ----------
-const COUNTRY = { DE: "Deutschland", AT: "Österreich", IT: "Italien", FR: "Frankreich", ES: "Spanien", PT: "Portugal", SI: "Slowenien", CZ: "Tschechien", SK: "Slowakei", PL: "Polen", SE: "Schweden", FI: "Finnland", BG: "Bulgarien", RO: "Rumänien", HR: "Kroatien", BE: "Belgien", NL: "Niederlande", DK: "Dänemark", GR: "Griechenland", IE: "Irland", HU: "Ungarn", LU: "Luxemburg", EE: "Estland", LV: "Lettland", LT: "Litauen", SVK: "Slowakei" };
+const COUNTRY = { DE: "Deutschland", AT: "Österreich", CH: "Schweiz", AD: "Andorra", IT: "Italien", FR: "Frankreich", ES: "Spanien", PT: "Portugal", SI: "Slowenien", CZ: "Tschechien", SK: "Slowakei", PL: "Polen", SE: "Schweden", FI: "Finnland", BG: "Bulgarien", RO: "Rumänien", HR: "Kroatien", BE: "Belgien", NL: "Niederlande", DK: "Dänemark", GR: "Griechenland", IE: "Irland", HU: "Ungarn", LU: "Luxemburg", EE: "Estland", LV: "Lettland", LT: "Litauen", SVK: "Slowakei" };
 const PARKS_ALL = () => (window.PARKS || []);
 let parkFilter = { q: "", cc: "ALL" };
 let userPos = null;
@@ -487,7 +665,7 @@ const trailsOf = (p) => ((settings.osm && settings.osm[p.n]) || p.t || []).conca
 
 function renderChips() {
   const ccs = [...new Set(PARKS_ALL().map((p) => p.c))];
-  const order = ["DE", "AT", "IT", "FR"];
+  const order = ["DE", "AT", "CH", "IT", "FR"];
   ccs.sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || (COUNTRY[a] || a).localeCompare(COUNTRY[b] || b));
   const chips = [["ALL", "Alle"], ["FAV", "★ Favoriten"]].concat(ccs.map((c) => [c, COUNTRY[c] || c]));
   $("#country-chips").innerHTML = chips.map(([k, l]) =>
@@ -578,11 +756,13 @@ function renderTrails() {
     return `<div class="trail ${isSel ? "sel" : ""}">
       <span class="sbadge ${cls}" title="Schwierigkeit: ${COL_NAME[cls] || "unbekannt"}">${S_LABEL(t)}</span>
       <span class="meta"><span class="name">${esc(t.n)}</span><span class="lbl">${meta || "&nbsp;"}</span></span>
+      <button class="rank-btn" data-key="${esc(key)}" aria-label="Rangliste ${esc(t.n)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v4a5 5 0 01-10 0zM5 5H3v2a4 4 0 004 4M19 5h2v2a4 4 0 01-4 4M12 13v4M8 21h8M9 17h6v4H9z"/></svg></button>
       <button class="pick-btn" data-k="${k}">${isSel ? "Gewählt" : "Wählen"}</button></div>`;
   }).join("") + tail;
   $("#trail-list").innerHTML = html;
   const rb = $("#osm-refresh");
   if (rb) rb.addEventListener("click", () => refreshOsm(p, rb));
+  $("#trail-list").querySelectorAll(".rank-btn").forEach((b) => b.addEventListener("click", () => { if (window.Account) Account.openRanking(b.dataset.key); }));
   $("#trail-list").querySelectorAll(".pick-btn").forEach((b) => b.addEventListener("click", () => {
     const t = ts[Number(b.dataset.k)];
     settings.sel = { park: p.n, trail: t.n };
@@ -602,7 +782,7 @@ function renderTrails() {
   }
 }
 // Strecken live aus OpenStreetMap (Overpass) nachladen
-const OVERPASS = ["https://overpass.openstreetmap.fr/api/interpreter", "https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+const OVERPASS = ["https://overpass.openstreetmap.fr/api/interpreter", "https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
 async function refreshOsm(p, btn) {
   if (!navigator.onLine) { alert("Keine Internetverbindung."); return; }
   btn.disabled = true; btn.textContent = "Lade Strecken … (bis zu 1 Minute)";

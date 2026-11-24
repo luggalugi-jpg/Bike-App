@@ -31,7 +31,9 @@ window.Crew = (() => {
       try { msg = JSON.parse(txt).message || txt; } catch (e) {}
       throw new Error(msg);
     }
-    return txt ? JSON.parse(txt) : null;
+    const j = txt ? JSON.parse(txt) : null;
+    if (j && j.error) throw new Error(j.error);
+    return j;
   }
   const auth = () => ({ p_member: me.member, p_secret: me.secret });
 
@@ -269,6 +271,7 @@ window.Crew = (() => {
     const m = e.message || "";
     if (/crew_not_found/.test(m)) return "Diesen Crew-Code gibt es nicht. Bitte prüfen.";
     if (/crew_full/.test(m)) return "Die Crew ist voll (max. 30).";
+    if (/rate_limited/.test(m)) return "Zu viele Versuche. Bitte warte etwas und probier es dann nochmal.";
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Keine Verbindung zum Server.";
     return "Das hat nicht geklappt: " + m;
   }
