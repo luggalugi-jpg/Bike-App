@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=3">
+<link rel="stylesheet" href="app.css?v=4">
 </head>
 <body>
 <main id="app">
@@ -136,14 +136,60 @@
 
   <!-- SICHERHEIT -->
   <section id="view-safety" class="view" aria-labelledby="h-safety">
-    <header class="top"><h1 id="h-safety" class="title">Sicherheit</h1></header>
+    <header class="top"><h1 id="h-safety" class="title">Crew</h1><span id="crew-sync" class="lbl"></span></header>
+
+    <!-- Noch in keiner Crew -->
+    <div id="crew-none" class="col gap12">
+      <p class="hint small">Fahr mit Freunden: Ihr seht euch live auf der Karte, und bei einem Sturz bekommt die ganze Crew sofort Bescheid.</p>
+      <form id="crew-join-form" class="card col gap12">
+        <span class="strong">Crew beitreten</span>
+        <label class="mini">Crew-Code<input id="join-code" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="z. B. 5W8P2X" required></label>
+        <label class="mini">Dein Name<input id="join-name" maxlength="30" autocomplete="nickname" required></label>
+        <button class="btn primary">Beitreten</button>
+      </form>
+      <form id="crew-create-form" class="card col gap12">
+        <span class="strong">Neue Crew erstellen</span>
+        <label class="mini">Name der Crew<input id="create-crew" maxlength="40" placeholder="z. B. Sonntagsrunde" required></label>
+        <label class="mini">Dein Name<input id="create-name" maxlength="30" autocomplete="nickname" required></label>
+        <button class="btn ghost">Crew erstellen</button>
+      </form>
+      <p id="crew-err" class="hint small danger-text" role="alert"></p>
+    </div>
+
+    <!-- In einer Crew -->
+    <div id="crew-in" class="col gap12" hidden>
+      <div class="card col gap8">
+        <div class="row between gap8">
+          <div class="col"><span id="crew-name" class="strong big-name"></span><span class="lbl">Code <b id="crew-code" class="code"></b></span></div>
+          <button id="crew-invite" class="btn ghost">Einladen</button>
+        </div>
+      </div>
+      <div id="crew-sos-banner" class="sos-banner" hidden>
+        <span><b>SOS aktiv</b> – deine Crew sieht deinen Notruf.</span>
+        <button id="crew-sos-off" class="btn ghost">Entwarnung</button>
+      </div>
+      <div id="crew-map" class="crew-map" aria-label="Karte mit deiner Crew"></div>
+      <div class="card row between gap12">
+        <div class="col"><label for="crew-share" class="strong">Live teilen</label>
+          <span id="crew-share-hint" class="lbl">Deine Position ist für die Crew sichtbar, solange das an ist.</span></div>
+        <input id="crew-share" type="checkbox" class="switch">
+      </div>
+      <div id="crew-list" class="list"></div>
+      <div class="row gap8">
+        <button id="crew-meet" class="btn ghost flex1">Treffpunkt hier</button>
+        <button id="crew-sos" class="btn danger flex1">SOS an Crew</button>
+      </div>
+      <button id="crew-leave" class="more">Crew verlassen</button>
+    </div>
+
+    <h2 class="h2">Sicherheit</h2>
 
     <div class="card col gap12">
       <div class="row between">
         <label for="crash-on" class="strong">Sturzerkennung</label>
         <input id="crash-on" type="checkbox" class="switch">
       </div>
-      <p class="hint small">Erkennt während eines Laufs einen harten Aufprall mit anschließendem Stillstand. Dann klingelt das Handy 30 Sekunden lang. Reagierst du nicht, öffnet die App eine fertige SMS mit deinem Standort an deinen Notfallkontakt.</p>
+      <p class="hint small">Erkennt während eines Laufs einen harten Aufprall mit anschließendem Stillstand. Dann klingelt das Handy 30 Sekunden lang. Reagierst du nicht, bekommt deine Crew einen SOS mit Standort, und die App öffnet eine fertige SMS an deinen Notfallkontakt.</p>
       <label class="mini">Empfindlichkeit
         <select id="crash-g">
           <option value="3">Hoch (ab 3 g)</option>
@@ -165,10 +211,7 @@
       <strong>Wichtig:</strong> Eine Web-App kann nicht selbst anrufen oder SMS verschicken. Sie bereitet die Nachricht vor, abschicken musst du (oder jemand anderes) sie selbst. Bei gesperrtem Bildschirm kann der Browser die Sensoren pausieren. Verlass dich also nicht allein darauf, und fahr möglichst nicht allein.
     </div>
 
-    <div class="card col gap6">
-      <span class="strong">Crew-Live-Karte</span>
-      <span class="hint small">Kommt als Nächstes: Freunde live auf der Karte sehen und bei einem Sturz automatisch benachrichtigen. Dafür braucht die App einen Server.</span>
-    </div>
+    <p class="hint small">Crew-Daten liegen auf einem Server in Frankfurt (Supabase). Gespeichert werden nur dein Anzeigename und, solange du teilst, deine letzte Position. Positionen werden nach 24 Stunden ohne Aktualisierung gelöscht. Karte: © OpenStreetMap-Mitwirkende.</p>
   </section>
 
   <nav class="tabs" aria-label="Hauptnavigation">
@@ -181,7 +224,7 @@
     <button data-view="setup" class="tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>Setup</button>
     <button data-view="safety" class="tab">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Sicherheit</button>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9.5" r="2.5"/><path d="M3 20c.6-3.6 3-5.5 6-5.5s5.4 1.9 6 5.5M15 15.2c2.8-.3 5 1.2 5.8 4.3"/></svg>Crew</button>
   </nav>
 </main>
 
@@ -194,6 +237,18 @@
     <button id="btn-ok" class="btn primary big-btn">Mir geht's gut</button>
     <a id="btn-sms" class="btn danger" href="#">SMS an Notfallkontakt</a>
     <a class="btn ghost" href="tel:112">112 anrufen</a>
+  </div>
+</div>
+
+<!-- Alarm aus der Crew -->
+<div id="crew-alert" class="overlay" hidden role="alertdialog" aria-labelledby="ca-h" aria-describedby="ca-p">
+  <div class="alarm-box">
+    <svg viewBox="0 0 24 24" class="alarm-ico" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/></svg>
+    <h2 id="ca-h"></h2>
+    <p id="ca-p"></p>
+    <a id="ca-nav" class="btn primary big-btn" target="_blank" rel="noopener">Hinfahren / Navigation</a>
+    <a class="btn danger" href="tel:112">112 anrufen</a>
+    <button id="ca-ok" class="btn ghost">Gesehen</button>
   </div>
 </div>
 
@@ -212,7 +267,8 @@
   </div>
 </div>
 
-<script src="parks.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="parks.js?v=4"></script>
+<script src="app.js?v=4"></script>
+<script src="crew.js?v=4"></script>
 </body>
 </html>

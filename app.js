@@ -50,6 +50,7 @@ function show(v) {
   });
   if (v === "runs") renderRuns();
   if (v === "parks") renderParks();
+  if (v === "safety" && window.Crew) Crew.onShow();
   if (v === "park") document.querySelector('.tab[data-view="parks"]').classList.add("on");
   window.scrollTo(0, 0);
 }
@@ -144,6 +145,7 @@ function onFix(p) {
   const now = p.timestamp || Date.now();
   const fix = { lat: c.latitude, lon: c.longitude, t: now, acc: c.accuracy };
   lastFix = fix;
+  if (window.Crew) Crew.fix(fix, run.active ? run.speed : null);
   $("#gps-state").textContent = "GPS: ±" + Math.round(c.accuracy) + " m";
   if (!run.active) return;
 
@@ -265,9 +267,10 @@ function smsHref() {
   const text = `Notfall: Ich bin beim Downhill vermutlich gestürzt und habe nicht reagiert.${trail} Mein letzter Standort: ${pos}`;
   return `sms:${(settings.cPhone || "").replace(/\s/g, "")}?&body=${encodeURIComponent(text)}`;
 }
-function startAlarm() {
+function startAlarm(test) {
   unlockAudio();
-  alarm.on = true; alarm.left = 30;
+  alarm.on = true; alarm.left = 30; alarm.test = !!test;
+  if (!alarm.test && window.Crew) Crew.alarm("alarm");
   $("#alarm-count").textContent = alarm.left;
   $("#btn-sms").href = smsHref();
   $("#btn-sms").textContent = settings.cName ? `SMS an ${settings.cName}` : "SMS an Notfallkontakt";
@@ -282,7 +285,9 @@ function startAlarm() {
     if (alarm.left <= 0) {
       clearInterval(alarm.timer);
       $("#btn-sms").href = smsHref();
-      if (settings.cPhone) location.href = $("#btn-sms").href;
+      if (!alarm.test && window.Crew) Crew.alarm("sos");
+      // kurz warten, damit der SOS an die Crew raus ist, bevor die SMS-App aufgeht
+      if (settings.cPhone && !alarm.test) setTimeout(() => { location.href = $("#btn-sms").href; }, 1500);
     }
   };
   tick();
@@ -295,9 +300,10 @@ function stopAlarm() {
   $("#alarm").hidden = true;
   $("#alarm").classList.remove("alarm-flash");
   resetMotion();
+  if (!alarm.test && window.Crew) Crew.alarm(null);
 }
 $("#btn-ok").addEventListener("click", stopAlarm);
-$("#btn-test").addEventListener("click", () => { unlockAudio(); startAlarm(); });
+$("#btn-test").addEventListener("click", () => { unlockAudio(); startAlarm(true); });
 
 // ---------- Läufe ----------
 function renderRuns() {

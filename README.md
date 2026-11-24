@@ -7,6 +7,7 @@ Web-App (PWA) für Downhill-Fahrer. Läuft im Handy-Browser und lässt sich auf 
 - **Live:** Strecke wählen und Lauf per GPS aufzeichnen: Speed, Vmax, Zeit, Strecke, Tiefenmeter. Sprünge und Airtime erkennt die App über den Bewegungssensor.
 - **Läufe:** Verlauf, Bestzeit pro Trail, Teilen.
 - **Setup:** Fork/Shock-Werte (Air Pressure, Rebound, LSC, HSC, Volume Spacers), Sag Calculator, Tire Pressure, Notes.
+- **Crew:** Crew erstellen oder per Code/Link beitreten, Live-Karte aller Mitglieder, „Live teilen“, Treffpunkt, SOS an die Crew. Erkennt ein Handy einen Sturz, bekommen die anderen sofort einen Alarm mit Navigation. Server: Supabase-Projekt „Bike-App“ (Frankfurt); Zugriff nur über abgesicherte Funktionen (siehe `crew.js`).
 - **Sicherheit:** Sturzerkennung (Aufprall + Stillstand) mit 30-s-Alarm. Danach öffnet sich eine vorbereitete SMS mit Standort an den Notfallkontakt.
 
 Streckendaten: © OpenStreetMap-Mitwirkende, ODbL. Die Liste der Parks steht in `parks.js`.
