@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=5">
+<link rel="stylesheet" href="app.css?v=6">
 </head>
 <body>
 <main id="app">
@@ -70,7 +70,7 @@
     </div>
     <div id="country-chips" class="chips" role="group" aria-label="Land filtern"></div>
     <div id="park-list" class="list"></div>
-    <p class="hint small">Streckendaten: © OpenStreetMap-Mitwirkende (ODbL). Nicht jede Strecke ist dort erfasst. Fehlt eine, kannst du sie im Park selbst hinzufügen.</p>
+    <p class="hint small">Streckendaten: © OpenStreetMap-Mitwirkende (ODbL), teils aus offiziellen Streckenplänen. Nicht jede Strecke ist erfasst. Fehlt eine, kannst du sie im Park selbst hinzufügen.</p>
   </section>
 
   <!-- PARK-DETAIL -->
@@ -88,7 +88,7 @@
       <button id="park-add" class="btn ghost flex1">+ Eigene Strecke</button>
     </div>
     <div class="legend" aria-hidden="true">
-      <span><i class="dot-s s0"></i>leicht</span><span><i class="dot-s s1"></i>mittel</span><span><i class="dot-s s2"></i>schwer</span><span><i class="dot-s s3"></i>sehr schwer</span><span>DH Downhill · FR Freeride · FL Flow · JL Jumpline</span>
+      <span>Farbe wie im Park:</span><span><i class="dot-s s0"></i>grün</span><span><i class="dot-s s1"></i>blau</span><span><i class="dot-s s2"></i>rot</span><span><i class="dot-s s3"></i>schwarz</span><span>(leicht → schwer) · DH Downhill · FR Freeride · EN Enduro · FL Flow · JL Jumpline</span>
     </div>
     <div id="trail-list" class="list"></div>
   </section>
@@ -304,9 +304,9 @@
   </div>
 </div>
 
-<script src="parks.js?v=5"></script>
-<script src="app.js?v=5"></script>
-<script src="crew.js?v=6"></script>
-<script src="account.js?v=5"></script>
+<script src="parks.js?v=6"></script>
+<script src="app.js?v=6"></script>
+<script src="crew.js?v=7"></script>
+<script src="account.js?v=6"></script>
 </body>
 </html>

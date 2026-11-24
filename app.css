@@ -190,3 +190,6 @@ button,input,select,textarea{font:inherit;color:inherit}
 .legal-links a{color:var(--muted)}
 #acct-body,#rank-body{display:flex;flex-direction:column;gap:12px}
 #acct-body .btn,#acct-body form .btn{width:100%}
+.trail .name{white-space:normal;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.trail{gap:10px}
+.pick-btn{padding:0 12px}

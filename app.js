@@ -657,7 +657,7 @@ let curPark = -1;
 let addingTrail = false;
 // Schwierigkeit: offizielle Bikepark-Farbe (grün/blau/rot/schwarz), sonst aus der MTB-Skala abgeleitet
 const COL = { green: "s0", blue: "s1", red: "s2", orange: "s2", black: "s3", yellow: "s0" };
-const COL_NAME = { s0: "leicht", s1: "mittel", s2: "schwer", s3: "sehr schwer", sx: "" };
+const COL_NAME = { s0: "grün", s1: "blau", s2: "rot", s3: "schwarz", sx: "" };
 const S_CLASS = (t) => (t.col && COL[t.col]) || (t.s === null || t.s === undefined ? "sx" : t.s <= 0 ? "s0" : t.s === 1 ? "s1" : t.s === 2 ? "s2" : "s3");
 const TYPE = { downhill: "DH", freeride: "FR", enduro: "EN", flow: "FL", dirt: "JL", jump: "JL", slopestyle: "SL", pump: "PT", gravity: "DH" };
 const S_LABEL = (t) => (t.ty && TYPE[t.ty.toLowerCase()]) || (t.s === null || t.s === undefined ? "–" : "S" + t.s);
@@ -752,7 +752,7 @@ function renderTrails() {
     const cnt = runs.filter((r) => r.trail === key).length;
     const isSel = s && s.park === p.n && s.trail === t.n;
     const cls = S_CLASS(t);
-    const meta = [COL_NAME[cls], t.s !== null && t.s !== undefined && t.ty ? "S" + t.s : "", t.l ? de(t.l / 1000, t.l < 10000 ? 1 : 0) + " km" : "", t.custom ? "eigene" : "", b ? "PB " + fmtTime(b.dur) : "", cnt ? cnt + (cnt === 1 ? " Lauf" : " Läufe") : ""].filter(Boolean).join(" · ");
+    const meta = [COL_NAME[cls], t.s !== null && t.s !== undefined && t.ty ? "S" + t.s : "", t.l ? de(t.l / 1000, t.l < 10000 ? 1 : 0) + " km" : "", t.custom ? "eigene" : "", t.src === "park" ? "lt. Bikepark" : "", b ? "PB " + fmtTime(b.dur) : "", cnt ? cnt + (cnt === 1 ? " Lauf" : " Läufe") : ""].filter(Boolean).join(" · ");
     return `<div class="trail ${isSel ? "sel" : ""}">
       <span class="sbadge ${cls}" title="Schwierigkeit: ${COL_NAME[cls] || "unbekannt"}">${S_LABEL(t)}</span>
       <span class="meta"><span class="name">${esc(t.n)}</span><span class="lbl">${meta || "&nbsp;"}</span></span>
