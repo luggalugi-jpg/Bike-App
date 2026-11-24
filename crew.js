@@ -15,6 +15,7 @@ window.Crew = (() => {
   let alarmStatus = null;                    // null | "alarm" | "sos"
   let manualSos = false;
   let map = null, markers = {}, meetMarker = null, fitted = false;
+  let picking = false, meetOpen = false;
   const seenAlarm = store.get("dh_crew_seen", {}); // Alarme anderer, die ich schon gesehen habe
   let showingAlert = null;
 
@@ -210,6 +211,8 @@ window.Crew = (() => {
     }).join("");
 
     renderMap();
+    if (!meetOpen) renderMeet();
+    else { const m = state.meet; const info = $("#meet-info"); if (!m) info.hidden = true; }
   }
 
   function loadLeaflet() {
@@ -235,6 +238,11 @@ window.Crew = (() => {
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19, attribution: "© OpenStreetMap-Mitwirkende"
       }).addTo(map);
+      map.on("click", (e) => {
+        if (!picking) return;
+        stopPick();
+        setMeet({ lat: e.latlng.lat, lon: e.latlng.lng }, $("#meet-note") ? $("#meet-note").value.trim() : (state.meet && state.meet.note));
+      });
     }
     setTimeout(() => map.invalidateSize(), 50);
     const pts = [];
@@ -256,8 +264,13 @@ window.Crew = (() => {
       const ll = [state.meet.lat, state.meet.lon];
       pts.push(ll);
       const icon = L.divIcon({ className: "pin-wrap", html: '<span class="pin meet">T</span>', iconSize: [30, 30], iconAnchor: [15, 15] });
-      if (!meetMarker) meetMarker = L.marker(ll, { icon, title: "Treffpunkt" }).addTo(map).bindTooltip("Treffpunkt", { direction: "top", offset: [0, -14] });
-      meetMarker.setLatLng(ll);
+      if (!meetMarker) {
+        meetMarker = L.marker(ll, { icon, title: "Treffpunkt (zum Verschieben ziehen)", draggable: true, autoPan: true }).addTo(map)
+          .bindTooltip("", { direction: "top", offset: [0, -14] });
+        meetMarker.on("dragend", () => { const p = meetMarker.getLatLng(); setMeet({ lat: p.lat, lon: p.lng }, state.meet && state.meet.note); });
+      }
+      if (!meetMarker.dragging || !meetMarker.dragging._draggable || !meetMarker.dragging._draggable._moving) meetMarker.setLatLng(ll);
+      meetMarker.setTooltipContent("Treffpunkt" + (state.meet.note ? ": " + esc(state.meet.note) : ""));
     } else if (meetMarker) { map.removeLayer(meetMarker); meetMarker = null; }
     if (!fitted && pts.length) {
       fitted = true;
@@ -325,15 +338,75 @@ window.Crew = (() => {
     if (settings.crewShare) startShareWatch(); else if (!alarmStatus && !manualSos) stopShareWatch();
     push(true);
   });
-  $("#crew-meet").addEventListener("click", async () => {
-    const f = myFix || lastFix;
-    const go = async (pos) => {
-      try { await rpc("crew_meet", Object.assign(auth(), { p_lat: pos.lat, p_lon: pos.lon, p_note: null })); fitted = false; poll(); }
-      catch (e) { alert(friendly(e)); }
-    };
-    if (f) return go(f);
-    navigator.geolocation.getCurrentPosition((p) => go({ lat: p.coords.latitude, lon: p.coords.longitude }),
-      () => alert("Standort nicht verfügbar."), { enableHighAccuracy: true, timeout: 15000 });
+  // ---------- Treffpunkt ----------
+  async function setMeet(pos, note) {
+    try {
+      await rpc("crew_meet", Object.assign(auth(), { p_lat: pos ? pos.lat : null, p_lon: pos ? pos.lon : null, p_note: pos && note ? note.slice(0, 80) : null }));
+      if (pos) fitted = false;
+      meetOpen = false;
+      await poll();
+      renderMeet();
+    } catch (e) { alert(friendly(e)); }
+  }
+  function startPick() {
+    if (!map) return;
+    picking = true;
+    $("#meet-pick").hidden = false;
+    $("#crew-map").classList.add("picking");
+    $("#crew-map").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function stopPick() {
+    picking = false;
+    $("#meet-pick").hidden = true;
+    $("#crew-map").classList.remove("picking");
+  }
+  $("#meet-pick-cancel").addEventListener("click", stopPick);
+  function renderMeet() {
+    const m = state && state.meet;
+    const info = $("#meet-info");
+    if (m) {
+      const nav = `https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}&travelmode=walking`;
+      const dist = myFix ? " · " + de(haversine(myFix, m) / 1000, 1) + " km" : "";
+      info.hidden = false;
+      info.innerHTML = `<span class="pin meet small-pin" aria-hidden="true">T</span>
+        <span class="meta"><span class="strong">Treffpunkt${m.note ? ": " + esc(m.note) : ""}</span><span class="lbl">gesetzt ${esc(ago(m.at))}${dist}</span></span>
+        <a class="nav-btn" href="${nav}" target="_blank" rel="noopener">Hin</a>`;
+    } else info.hidden = true;
+    const btn = $("#crew-meet");
+    btn.textContent = m ? "Treffpunkt ändern" : "Treffpunkt setzen";
+    btn.setAttribute("aria-expanded", meetOpen);
+    const panel = $("#meet-panel");
+    panel.hidden = !meetOpen;
+    if (!meetOpen) return;
+    const park = settings.sel && settings.sel.park ? PARKS_ALL().find((p) => p.n === settings.sel.park && p.lat !== null) : null;
+    panel.innerHTML = `<span class="strong">${m ? "Treffpunkt ändern" : "Treffpunkt setzen"}</span>
+      <label class="mini">Notiz (optional)<input id="meet-note" maxlength="80" placeholder="z. B. Talstation Gondel, 14 Uhr" value="${m && m.note ? esc(m.note) : ""}"></label>
+      <button id="meet-here" class="btn ghost">An meinem Standort</button>
+      <button id="meet-map" class="btn ghost">Auf der Karte wählen</button>
+      ${park ? `<button id="meet-park" class="btn ghost">Am Bikepark: ${esc(park.n)}</button>` : ""}
+      ${m ? `<button id="meet-note-save" class="btn ghost">Nur Notiz speichern</button><button id="meet-del" class="btn ghost danger-text">Treffpunkt löschen</button>` : ""}
+      <span class="lbl">Tipp: Den Treffpunkt-Pin kannst du auf der Karte auch einfach verschieben.</span>`;
+    const note = () => $("#meet-note").value.trim();
+    $("#meet-here").addEventListener("click", () => {
+      const f = myFix || lastFix;
+      if (f && Date.now() - (f.t || 0) < 120000) return setMeet(f, note());
+      $("#meet-here").textContent = "Suche Standort …";
+      navigator.geolocation.getCurrentPosition((p) => setMeet({ lat: p.coords.latitude, lon: p.coords.longitude }, note()),
+        () => { $("#meet-here").textContent = "An meinem Standort"; alert("Standort nicht verfügbar. Wähl den Treffpunkt stattdessen auf der Karte."); },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+    });
+    $("#meet-map").addEventListener("click", () => { meetOpen = false; renderMeet(); startPick(); });
+    if (park) $("#meet-park").addEventListener("click", () => setMeet({ lat: park.lat, lon: park.lon }, note() || park.n));
+    if (m) {
+      $("#meet-note-save").addEventListener("click", () => setMeet({ lat: m.lat, lon: m.lon }, note()));
+      $("#meet-del").addEventListener("click", () => setMeet(null));
+    }
+  }
+  $("#crew-meet").addEventListener("click", () => {
+    if (picking) stopPick();
+    meetOpen = !meetOpen;
+    renderMeet();
+    if (meetOpen) $("#meet-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
   $("#crew-sos").addEventListener("click", () => {
     if (!confirm("SOS an deine Crew senden? Alle sehen deinen Standort und einen Alarm.")) return;

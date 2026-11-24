@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=6">
+<link rel="stylesheet" href="app.css?v=7">
 </head>
 <body>
 <main id="app">
@@ -180,7 +180,13 @@
         <span><b>SOS aktiv</b> – deine Crew sieht deinen Notruf.</span>
         <button id="crew-sos-off" class="btn ghost">Entwarnung</button>
       </div>
+      <div id="meet-pick" class="pick-banner" hidden role="status">
+        <span>Tippe auf die Karte, wo ihr euch treffen wollt.</span>
+        <button id="meet-pick-cancel" class="btn ghost">Abbrechen</button>
+      </div>
       <div id="crew-map" class="crew-map" aria-label="Karte mit deiner Crew"></div>
+      <div id="meet-info" class="meet-info" hidden></div>
+      <div id="meet-panel" class="card col gap12" hidden></div>
       <div class="card row between gap12">
         <div class="col"><label for="crew-share" class="strong">Live teilen</label>
           <span id="crew-share-hint" class="lbl">Deine Position ist für die Crew sichtbar, solange das an ist.</span></div>
@@ -188,7 +194,7 @@
       </div>
       <div id="crew-list" class="list"></div>
       <div class="row gap8">
-        <button id="crew-meet" class="btn ghost flex1">Treffpunkt hier</button>
+        <button id="crew-meet" class="btn ghost flex1" aria-expanded="false" aria-controls="meet-panel">Treffpunkt</button>
         <button id="crew-sos" class="btn danger flex1">SOS an Crew</button>
       </div>
       <button id="crew-leave" class="more">Crew verlassen</button>
@@ -306,7 +312,7 @@
 
 <script src="parks.js?v=6"></script>
 <script src="app.js?v=6"></script>
-<script src="crew.js?v=7"></script>
+<script src="crew.js?v=8"></script>
 <script src="account.js?v=6"></script>
 </body>
 </html>
