@@ -600,10 +600,13 @@ const OVERPASS = ["https://overpass.openstreetmap.fr/api/interpreter", "https://
 async function refreshOsm(p, btn) {
   if (!navigator.onLine) { alert("Keine Internetverbindung."); return; }
   btn.disabled = true; btn.textContent = "Lade Strecken … (bis zu 1 Minute)";
+  const A = `(around:5000,${p.lat},${p.lon})`;
   const q = `[out:json][timeout:60];
-way(around:5000,${p.lat},${p.lon})["highway"~"^(path|track)$"]["name"]["piste:type"!~"."]->.w;
+way${A}["highway"~"^(path|track)$"]["name"]["piste:type"!~"."]->.w;
 (way.w["highway"="path"]["bicycle"="designated"]; way.w["highway"="path"]["mtb"~"^(yes|designated)$"]; way.w["mtb:type"]; way.w["highway"="path"]["mtb:scale"]["foot"="no"]; way.w["name"~"line|trail|downhill|freeride|flow|gravity|enduro|fourcross|4x|dual|jump|slope|bikepark|bike park",i];);
-out tags geom;`;
+out tags geom;
+relation${A}["route"="mtb"]["name"]["mtb:type"~"downhill|freeride|enduro|dirt|jump|slopestyle|flow|gravity|pump",i];
+out tags;`;
   let j = null;
   for (const u of OVERPASS) {
     try {
@@ -614,20 +617,43 @@ out tags geom;`;
     } catch (e) { /* nächster Server */ }
   }
   if (!j) { btn.disabled = false; btn.textContent = "Server ausgelastet – nochmal versuchen"; return; }
-  const g = {};
+  const BIKE = /line|trail|flow|downhill|freeride|jump|enduro|bike|track|4x|cross|drop|slalom|pump|shore|rock|dh\b|ride|piste|park|dual/i;
+  const STREET = /(weg|straße|strasse|steig|ufer|brücke|promenade|platz|gasse|allee|ring|hütte)\b|^vicolo|^via |^chemin|^rue |^strada|^sentiero|radweg|^im |^am |^in der |winter/i;
+  const COLS = ["green", "blue", "red", "black", "yellow", "orange"];
+  const g = new Map();
+  // 1) offizielle MTB-Routen (mit Farbe)
   for (const e of j.elements || []) {
-    const tg = e.tags || {}, gm = e.geometry || [];
-    let len = 0;
-    for (let k = 1; k < gm.length; k++) len += haversine(gm[k - 1], gm[k]);
-    const key = tg.name.trim();
-    const sc = parseInt(tg["mtb:scale"]);
-    if (!g[key]) g[key] = { n: key, s: null, l: 0, d: 1e9 };
-    g[key].l += len;
-    if (!isNaN(sc)) g[key].s = Math.max(g[key].s ?? -1, sc);
-    if (gm.length) { const m = gm[Math.floor(gm.length / 2)]; g[key].d = Math.min(g[key].d, haversine(p, m)); }
+    if (e.type !== "relation") continue;
+    const tg = e.tags || {}, n = tg.name.trim(), k = n.toLowerCase();
+    if (g.has(k)) continue;
+    const o = { n };
+    const col = (tg.colour || "").toLowerCase(); if (COLS.includes(col)) o.col = col;
+    const ty = (tg["mtb:type"] || "").toLowerCase().split(/[;,]/)[0].trim(); if (ty) o.ty = ty;
+    const sc = parseInt(tg["mtb:scale"]); if (!isNaN(sc)) o.s = sc;
+    g.set(k, o);
   }
-  const list = Object.values(g).filter((x) => x.l >= 150).sort((a, b) => a.d - b.d).slice(0, 45)
-    .map((x) => ({ n: x.n, s: x.s, l: Math.round(x.l) }));
+  // 2) einzelne Wege
+  for (const e of j.elements || []) {
+    if (e.type !== "way") continue;
+    const tg = e.tags || {}, gm = e.geometry || [];
+    const n = tg.name.trim(), k = n.toLowerCase();
+    let len = 0;
+    for (let i = 1; i < gm.length; i++) len += haversine(gm[i - 1], gm[i]);
+    const sc = parseInt(tg["mtb:scale"]);
+    let o = g.get(k);
+    if (!o) {
+      if (STREET.test(n) && !BIKE.test(n)) continue;
+      if (isNaN(sc) && !tg["mtb:type"] && !BIKE.test(n)) continue;
+      o = { n, way: true }; g.set(k, o);
+    }
+    o.l = (o.l || 0) + len;
+    if (!isNaN(sc)) o.s = Math.max(o.s ?? -1, sc);
+  }
+  const rank = (o) => o.col ? ["green", "yellow", "blue", "red", "orange", "black"].indexOf(o.col) / 2 : (o.s === undefined ? 9 : Math.min(3, o.s));
+  const list = [...g.values()].filter((o) => !o.way || o.l >= 50)
+    .map((o) => { const x = { n: o.n }; if (o.col) x.col = o.col; if (o.ty) x.ty = o.ty; if (o.s !== undefined) x.s = o.s; if (o.l) x.l = Math.round(o.l); return x; })
+    .sort((a, b) => rank(a) - rank(b) || a.n.localeCompare(b.n, "de")).slice(0, 60);
+  if (!list.length) { btn.disabled = false; btn.textContent = "Keine Strecken in OpenStreetMap gefunden"; return; }
   settings.osm = settings.osm || {}; settings.osmAt = settings.osmAt || {};
   settings.osm[p.n] = list; settings.osmAt[p.n] = Date.now();
   saveSettings(); renderTrails();
