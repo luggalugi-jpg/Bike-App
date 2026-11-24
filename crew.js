@@ -102,8 +102,12 @@ window.Crew = (() => {
   }
 
   // ---------- Abfrage ----------
+  let lastPoll = 0;
   async function poll() {
-    if (!me || document.visibilityState !== "visible") return;
+    if (!me) return;
+    // im Hintergrund seltener abfragen (Akku), aber nicht ganz aufhören
+    if (document.visibilityState !== "visible" && Date.now() - lastPoll < 15000) return;
+    lastPoll = Date.now();
     try {
       state = await rpc("crew_state", auth());
       setSync("");
