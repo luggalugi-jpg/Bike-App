@@ -31,9 +31,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .hint{color:var(--muted);font-size:14px;margin:0}
 .small{font-size:13px;line-height:1.45}
 
-.trail-input,.bike-input{background:transparent;border:none;border-bottom:1px solid var(--line);padding:4px 0;font-family:var(--disp);font-size:20px;font-weight:700;width:100%;min-height:40px}
-.bike-input{font-size:15px;font-weight:600;max-width:55%;text-align:right}
-.trail-input:focus,.bike-input:focus{outline:none;border-color:var(--accent)}
+.bike-input{background:transparent;border:none;border-bottom:1px solid var(--line);padding:4px 0;font-family:var(--disp);font-size:20px;font-weight:700;width:100%;min-height:40px}
+.bike-input{font-size:15px;font-weight:600;max-width:55%;text-align:right;font-family:var(--disp)}
+.bike-input:focus{outline:none;border-color:var(--accent)}
 
 .pill{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;white-space:nowrap}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--red);animation:blink 1s infinite}
@@ -57,7 +57,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .icon-btn{width:44px;height:44px;border-radius:12px;border:none;background:var(--card2);display:flex;align-items:center;justify-content:center}
 .icon-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2}
 
-.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:rgba(14,15,17,.96);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:8px max(8px,calc(50% - 260px)) calc(env(safe-area-inset-bottom) + 8px)}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);background:rgba(14,15,17,.96);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:8px max(8px,calc(50% - 260px)) calc(env(safe-area-inset-bottom) + 8px)}
 .tab{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:48px;justify-content:center;background:none;border:none;color:var(--muted);font-size:11px;font-weight:500}
 .tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .tab.on{color:var(--accent)}
@@ -113,3 +113,38 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 .sheet{align-items:flex-end;padding:0}
 .sheet-box{background:var(--bg);border-top:1px solid var(--line);border-radius:24px 24px 0 0;padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);width:100%;max-width:520px;display:flex;flex-direction:column;gap:14px;max-height:90dvh;overflow:auto}
+
+/* --- v2: Parks & Streckenwahl --- */
+.trail-pick{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:none;border:none;padding:4px 0;min-height:48px;text-align:left;min-width:0;flex:1;cursor:pointer}
+.trail-pick:disabled{cursor:default;opacity:.9}
+.trail-name{font-family:var(--disp);font-size:22px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62vw}
+.chev{width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:2;flex:none}
+.near{background:var(--card);border:1px dashed var(--accent);color:var(--text);border-radius:14px;padding:12px 14px;text-align:left;font-size:14px;min-height:48px}
+.search{flex:1;background:var(--card);border:1px solid transparent;border-radius:12px;padding:0 14px;min-height:48px;font-size:16px;color:var(--text);min-width:0}
+.search:focus{outline:none;border-color:var(--accent)}
+.near-btn{gap:6px;flex:none}
+.ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;min-height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);font-size:14px;font-weight:500}
+.chip.on{background:var(--text);color:#0E0F11;border-color:var(--text);font-weight:600}
+.park{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:14px;padding:12px 14px;border:none;text-align:left;width:100%;min-height:60px}
+.park .meta{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.park .name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc{flex:none;width:38px;height:38px;border-radius:10px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:13px;font-weight:700;color:var(--muted)}
+.star{color:var(--accent)}
+.legend{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:5px}
+.dot-s{width:10px;height:10px;border-radius:3px;display:inline-block}
+.s0{background:#1F9D4C}.s1{background:#2563EB}.s2{background:#DC2626}.s3{background:#000;box-shadow:inset 0 0 0 1.5px #F2F3F0}.sx{background:#4A4E54}
+.trail{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:14px;padding:10px 12px;width:100%;min-height:62px;border:2px solid transparent}
+.trail.sel{border-color:var(--accent)}
+.sbadge{flex:none;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:13px;font-weight:700;color:#fff}
+.sbadge.sx{color:#D5D8D2}
+.trail .meta{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.trail .name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick-btn{flex:none;min-height:44px;padding:0 14px;border-radius:10px;border:none;background:var(--accent);color:#0E0F11;font-weight:700;font-size:14px}
+.trail.sel .pick-btn{background:var(--text)}
+.icon-btn[aria-pressed="true"] svg{fill:var(--accent);stroke:var(--accent)}
+.icon-btn svg{stroke-linejoin:round}
+.more{background:none;border:none;color:var(--accent);font-weight:600;min-height:44px}

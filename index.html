@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=1">
+<link rel="stylesheet" href="app.css?v=2">
 </head>
 <body>
 <main id="app">
@@ -21,13 +21,14 @@
   <!-- LIVE -->
   <section id="view-live" class="view active" aria-labelledby="h-live">
     <header class="top">
-      <div class="col">
-        <label for="trail" class="eyebrow">Trail</label>
-        <input id="trail" class="trail-input" list="trail-list" placeholder="Trail wählen oder eingeben" autocomplete="off">
-        <datalist id="trail-list"></datalist>
-      </div>
+      <button id="pick-trail" class="trail-pick" aria-label="Strecke wählen">
+        <span id="pick-park" class="eyebrow">Bikepark wählen</span>
+        <span class="row gap8"><span id="pick-name" class="trail-name">Strecke wählen</span>
+          <svg viewBox="0 0 24 24" class="chev" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+      </button>
       <div id="rec" class="pill" hidden><span class="dot" aria-hidden="true"></span>Aufnahme</div>
     </header>
+    <button id="near-hint" class="near" hidden></button>
     <h1 id="h-live" class="sr-only">Live-Lauf</h1>
 
     <div class="speed">
@@ -50,6 +51,40 @@
     <p class="hint small">Tipp: Bildschirm bleibt während des Laufs an. Handy fest verstauen (z. B. Rucksack-Brustgurt), sonst zählt jeder Wackler.</p>
   </section>
 
+  <!-- PARKS -->
+  <section id="view-parks" class="view" aria-labelledby="h-parks">
+    <header class="top"><h1 id="h-parks" class="title">Bikeparks</h1><span id="park-count" class="lbl"></span></header>
+    <div class="row gap8">
+      <label for="park-q" class="sr-only">Bikepark suchen</label>
+      <input id="park-q" class="search" type="search" placeholder="Park oder Strecke suchen" autocomplete="off">
+      <button id="btn-near" class="btn ghost near-btn" aria-label="Parks in meiner Nähe">
+        <svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/></svg>Nähe</button>
+    </div>
+    <div id="country-chips" class="chips" role="group" aria-label="Land filtern"></div>
+    <div id="park-list" class="list"></div>
+    <p class="hint small">Streckendaten: © OpenStreetMap-Mitwirkende (ODbL). Nicht jede Strecke ist dort erfasst. Fehlt eine, kannst du sie im Park selbst hinzufügen.</p>
+  </section>
+
+  <!-- PARK-DETAIL -->
+  <section id="view-park" class="view" aria-labelledby="park-h">
+    <header class="top">
+      <button id="park-back" class="icon-btn" aria-label="Zurück zur Parkliste"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <div class="col flex1">
+        <span id="park-sub" class="eyebrow"></span>
+        <h1 id="park-h" class="title small-title"></h1>
+      </div>
+      <button id="park-fav" class="icon-btn" aria-label="Als Favorit merken" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1 6.2L12 17.4 6.5 20.3l1-6.2L3 9.7l6.2-.9z"/></svg></button>
+    </header>
+    <div class="row gap8">
+      <a id="park-map" class="btn ghost flex1" target="_blank" rel="noopener">Karte öffnen</a>
+      <button id="park-add" class="btn ghost flex1">+ Eigene Strecke</button>
+    </div>
+    <div class="legend" aria-hidden="true">
+      <span><i class="dot-s s0"></i>leicht</span><span><i class="dot-s s1"></i>mittel</span><span><i class="dot-s s2"></i>schwer</span><span><i class="dot-s s3"></i>sehr schwer</span><span>DH Downhill · FR Freeride · FL Flow · JL Jumpline</span>
+    </div>
+    <div id="trail-list" class="list"></div>
+  </section>
+
   <!-- LÄUFE -->
   <section id="view-runs" class="view" aria-labelledby="h-runs">
     <header class="top"><h1 id="h-runs" class="title">Läufe</h1></header>
@@ -66,9 +101,9 @@
       <input id="bike-name" class="bike-input" placeholder="Dein Bike">
     </header>
 
-    <div class="seg" role="tablist" aria-label="Federelement">
-      <button role="tab" id="tab-fork" aria-selected="true" class="seg-btn on">Gabel</button>
-      <button role="tab" id="tab-shock" aria-selected="false" class="seg-btn">Dämpfer</button>
+    <div class="seg" role="tablist" aria-label="Suspension">
+      <button role="tab" id="tab-fork" aria-selected="true" class="seg-btn on">Fork</button>
+      <button role="tab" id="tab-shock" aria-selected="false" class="seg-btn">Shock</button>
     </div>
 
     <div class="card sag">
@@ -78,10 +113,10 @@
         <text id="sag-txt" x="55" y="62" text-anchor="middle" fill="#F2F3F0" font-size="26" font-weight="700" font-family="Space Grotesk, sans-serif">–</text>
       </svg>
       <div class="col gap6">
-        <span class="lbl">SAG-Rechner</span>
+        <span class="lbl">Sag Calculator</span>
         <div class="row gap8">
-          <label class="mini">Federweg (mm)<input id="sag-travel" type="number" inputmode="decimal" min="0"></label>
-          <label class="mini">Eingefedert (mm)<input id="sag-sag" type="number" inputmode="decimal" min="0"></label>
+          <label class="mini">Travel (mm)<input id="sag-travel" type="number" inputmode="decimal" min="0"></label>
+          <label class="mini">Sag (mm)<input id="sag-sag" type="number" inputmode="decimal" min="0"></label>
         </div>
         <span id="sag-hint" class="hint small"></span>
       </div>
@@ -89,8 +124,11 @@
 
     <div id="setup-rows" class="card rows"></div>
 
+    <h2 class="h2">Tire Pressure</h2>
+    <div id="tire-rows" class="card rows"></div>
+
     <label class="card notes">
-      <span class="lbl">Notizen (Reifendruck, Strecke, Gefühl …)</span>
+      <span class="lbl">Notes (Strecke, Gefühl, Änderungen …)</span>
       <textarea id="setup-notes" rows="3"></textarea>
     </label>
     <p class="hint small">Wird automatisch auf diesem Gerät gespeichert.</p>
@@ -136,6 +174,8 @@
   <nav class="tabs" aria-label="Hauptnavigation">
     <button data-view="live" class="tab on" aria-current="page">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Live</button>
+    <button data-view="parks" class="tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20l6-12 4 7 3-4 5 9z"/></svg>Parks</button>
     <button data-view="runs" class="tab">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V10M12 20V4M18 20v-7"/></svg>Läufe</button>
     <button data-view="setup" class="tab">
@@ -172,6 +212,7 @@
   </div>
 </div>
 
-<script src="app.js?v=1"></script>
+<script src="parks.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

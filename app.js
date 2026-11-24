@@ -10,13 +10,14 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* voll oder gesperrt */ } }
 };
 let runs = store.get("dh_runs", []);
-let settings = Object.assign({ crashOn: true, crashG: 4, cName: "", cPhone: "", lastTrail: "" }, store.get("dh_settings", {}));
+let settings = Object.assign({ crashOn: true, crashG: 4, cName: "", cPhone: "", sel: null, favs: [], custom: {} }, store.get("dh_settings", {}));
 let setup = store.get("dh_setup", null) || {
   bike: "",
   notes: "",
   fork: { travel: "", sag: "", vals: { psi: 85, reb: 8, lsc: 6, hsc: 4, tok: 2 } },
   shock: { travel: "", sag: "", vals: { psi: 450, reb: 10, lsc: 6, hsc: 4 } }
 };
+if (!setup.tires) setup.tires = { front: 1.6, rear: 1.8 };
 const saveRuns = () => store.set("dh_runs", runs);
 const saveSettings = () => store.set("dh_settings", settings);
 const saveSetup = () => store.set("dh_setup", setup);
@@ -48,6 +49,8 @@ function show(v) {
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
   if (v === "runs") renderRuns();
+  if (v === "parks") renderParks();
+  if (v === "park") document.querySelector('.tab[data-view="parks"]').classList.add("on");
   window.scrollTo(0, 0);
 }
 
@@ -56,17 +59,29 @@ const run = { active: false };
 let watchId = null, timerId = null, wakeLock = null, audioCtx = null;
 let lastFix = null; // letzte bekannte Position (auch für Notfall-SMS)
 
-const trailInput = $("#trail");
-trailInput.value = settings.lastTrail || "";
-trailInput.addEventListener("change", () => { settings.lastTrail = trailInput.value.trim(); saveSettings(); updateBest(); });
-function fillTrailList() {
-  const names = [...new Set(runs.map((r) => r.trail).filter(Boolean))];
-  $("#trail-list").innerHTML = names.map((n) => `<option value="${esc(n)}"></option>`).join("");
+// Aktuell gewählte Strecke: { park, trail } – Schlüssel für Bestzeiten ist "Park · Strecke"
+const selKey = () => settings.sel ? (settings.sel.park ? settings.sel.park + " · " + settings.sel.trail : settings.sel.trail) : "Ohne Strecke";
+function renderSel() {
+  const s = settings.sel;
+  $("#pick-park").textContent = s && s.park ? s.park : "Bikepark wählen";
+  $("#pick-name").textContent = s ? s.trail : "Strecke wählen";
+  const hint = $("#near-hint");
+  if (!s) { hint.hidden = false; hint.textContent = "Wähle Park und Strecke, dann zählen deine Bestzeiten pro Trail →"; }
+  else hint.hidden = true;
+  updateBest();
 }
 function updateBest() {
-  const b = bestFor(trailInput.value.trim() || "Ohne Namen");
+  const b = bestFor(selKey());
   $("#best").textContent = b ? fmtTime(b.dur) : "–";
 }
+function fillTrailList() {}
+$("#pick-trail").addEventListener("click", () => {
+  if (run.active) return;
+  const s = settings.sel;
+  const i = s && s.park ? PARKS_ALL().findIndex((p) => p.n === s.park) : -1;
+  if (i >= 0) openPark(i); else show("parks");
+});
+$("#near-hint").addEventListener("click", () => show("parks"));
 
 $("#btn-run").addEventListener("click", () => (run.active ? stopRun() : startRun()));
 
@@ -75,10 +90,9 @@ async function startRun() {
   await askMotionPermission();
   unlockAudio();
 
-  const trail = trailInput.value.trim() || "Ohne Namen";
-  settings.lastTrail = trailInput.value.trim(); saveSettings();
+  const trail = selKey();
   Object.assign(run, {
-    active: true, trail, start: Date.now(), dist: 0, vmax: 0, drop: 0, air: 0, jumps: 0,
+    active: true, trail, park: settings.sel && settings.sel.park || "", tname: settings.sel ? settings.sel.trail : "", start: Date.now(), dist: 0, vmax: 0, drop: 0, air: 0, jumps: 0,
     speed: 0, last: null, altRef: null, points: []
   });
   resetMotion();
@@ -90,7 +104,7 @@ async function startRun() {
   $("#btn-run").textContent = "Lauf beenden";
   $("#btn-run").className = "btn stop big-btn";
   $("#rec").hidden = false;
-  trailInput.disabled = true;
+  $("#pick-trail").disabled = true;
   $("#gps-state").textContent = "GPS: suche Signal …";
   renderLive();
 }
@@ -106,14 +120,14 @@ function stopRun() {
   $("#btn-run").textContent = "Lauf starten";
   $("#btn-run").className = "btn primary big-btn";
   $("#rec").hidden = true;
-  trailInput.disabled = false;
+  $("#pick-trail").disabled = false;
   $("#speed").textContent = "0";
 
   const dur = Date.now() - run.start;
   if (dur < 5000) { $("#gps-state").textContent = "Lauf zu kurz – nicht gespeichert."; return; }
   const prevBest = bestFor(run.trail);
   const rec = {
-    id: String(run.start), trail: run.trail, start: run.start, dur,
+    id: String(run.start), trail: run.trail, park: run.park, tname: run.tname, start: run.start, dur,
     dist: Math.round(run.dist), vmax: run.vmax, drop: Math.round(run.drop),
     air: run.air, jumps: run.jumps
   };
@@ -354,19 +368,23 @@ $("#detail-share").addEventListener("click", async () => {
 // ---------- Setup ----------
 const ROWS = {
   fork: [
-    { k: "psi", label: "Luftdruck", hint: "psi", step: 1 },
-    { k: "reb", label: "Zugstufe", hint: "Klicks von geschlossen", step: 1 },
-    { k: "lsc", label: "Druckstufe Low", hint: "LSC · Klicks", step: 1 },
-    { k: "hsc", label: "Druckstufe High", hint: "HSC · Klicks", step: 1 },
-    { k: "tok", label: "Tokens", hint: "Volumenspacer", step: 1 }
+    { k: "psi", label: "Air Pressure", hint: "psi", step: 1 },
+    { k: "reb", label: "Rebound", hint: "Klicks von geschlossen", step: 1 },
+    { k: "lsc", label: "LSC", hint: "Low-Speed Compression · Klicks", step: 1 },
+    { k: "hsc", label: "HSC", hint: "High-Speed Compression · Klicks", step: 1 },
+    { k: "tok", label: "Volume Spacers", hint: "Tokens", step: 1 }
   ],
   shock: [
-    { k: "psi", label: "Feder / Luftdruck", hint: "lbs oder psi", step: 5 },
-    { k: "reb", label: "Zugstufe", hint: "Klicks von geschlossen", step: 1 },
-    { k: "lsc", label: "Druckstufe Low", hint: "LSC · Klicks", step: 1 },
-    { k: "hsc", label: "Druckstufe High", hint: "HSC · Klicks", step: 1 }
+    { k: "psi", label: "Spring Rate / Air Pressure", hint: "lbs oder psi", step: 5 },
+    { k: "reb", label: "Rebound", hint: "Klicks von geschlossen", step: 1 },
+    { k: "lsc", label: "LSC", hint: "Low-Speed Compression · Klicks", step: 1 },
+    { k: "hsc", label: "HSC", hint: "High-Speed Compression · Klicks", step: 1 }
   ]
 };
+const TIRES = [
+  { k: "front", label: "Front", hint: "bar", step: 0.1 },
+  { k: "rear", label: "Rear", hint: "bar", step: 0.1 }
+];
 const SAG_TARGET = { fork: [20, 30], shock: [28, 35] };
 let part = "fork";
 
@@ -397,38 +415,43 @@ function renderSag() {
   const arc = $("#sag-arc"), txt = $("#sag-txt"), hint = $("#sag-hint");
   if (!(t > 0) || !(s >= 0)) {
     arc.setAttribute("stroke-dasharray", "0 289");
+    arc.setAttribute("stroke-opacity", "0");
     txt.textContent = "–";
-    hint.textContent = `Typisch für Downhill: ${lo}–${hi} %`;
-    $("#sag-ring").setAttribute("aria-label", "SAG noch nicht berechnet");
+    hint.textContent = `Typischer Sag für Downhill: ${lo}–${hi} %`;
+    $("#sag-ring").setAttribute("aria-label", "Sag noch nicht berechnet");
     return;
   }
   const pct = Math.min(100, (s / t) * 100);
   arc.setAttribute("stroke-dasharray", `${(pct / 100) * 289} 289`);
+  arc.setAttribute("stroke-opacity", pct > 0 ? "1" : "0");
   txt.textContent = Math.round(pct) + " %";
-  $("#sag-ring").setAttribute("aria-label", `SAG ${Math.round(pct)} Prozent`);
+  $("#sag-ring").setAttribute("aria-label", `Sag ${Math.round(pct)} Prozent`);
   const ok = pct >= lo && pct <= hi;
   arc.setAttribute("stroke", ok ? "#C6FF3D" : "#FF8A80");
   hint.textContent = ok ? `Im typischen Bereich (${lo}–${hi} %).`
-    : pct < lo ? `Weniger als typisch (${lo}–${hi} %) → etwas weniger Druck/Feder.`
-    : `Mehr als typisch (${lo}–${hi} %) → etwas mehr Druck/härtere Feder.`;
+    : pct < lo ? `Weniger Sag als typisch (${lo}–${hi} %) → etwas weniger Air Pressure / weichere Feder.`
+    : `Mehr Sag als typisch (${lo}–${hi} %) → etwas mehr Air Pressure / härtere Feder.`;
 }
-function renderRows() {
-  const vals = setup[part].vals;
-  $("#setup-rows").innerHTML = ROWS[part].map((r) => `
+function stepRows(el, rows, vals, fmt) {
+  el.innerHTML = rows.map((r) => `
     <div class="srow">
       <span class="col"><span class="strong">${r.label}</span><span class="lbl">${r.hint}</span></span>
       <span class="stepper">
         <button data-k="${r.k}" data-d="-${r.step}" aria-label="${r.label} verringern">−</button>
-        <span class="v" aria-live="polite">${vals[r.k] ?? 0}</span>
+        <span class="v" aria-live="polite">${fmt(vals[r.k] ?? 0)}</span>
         <button data-k="${r.k}" data-d="${r.step}" aria-label="${r.label} erhöhen">+</button>
       </span>
     </div>`).join("");
-  $("#setup-rows").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+  el.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     const k = b.dataset.k;
-    vals[k] = Math.max(0, (vals[k] || 0) + Number(b.dataset.d));
+    vals[k] = Math.max(0, Math.round(((vals[k] || 0) + Number(b.dataset.d)) * 10) / 10);
     saveSetup();
-    b.parentElement.querySelector(".v").textContent = vals[k];
+    b.parentElement.querySelector(".v").textContent = fmt(vals[k]);
   }));
+}
+function renderRows() {
+  stepRows($("#setup-rows"), ROWS[part], setup[part].vals, (v) => v);
+  stepRows($("#tire-rows"), TIRES, setup.tires, (v) => de(v, 1));
 }
 
 // ---------- Sicherheit ----------
@@ -441,9 +464,185 @@ $("#crash-g").addEventListener("change", (e) => { settings.crashG = Number(e.tar
 $("#c-name").addEventListener("input", (e) => { settings.cName = e.target.value.trim(); saveSettings(); });
 $("#c-phone").addEventListener("input", (e) => { settings.cPhone = e.target.value.trim(); saveSettings(); });
 
+// ---------- Bikeparks ----------
+const COUNTRY = { DE: "Deutschland", AT: "Österreich", IT: "Italien", FR: "Frankreich", ES: "Spanien", PT: "Portugal", SI: "Slowenien", CZ: "Tschechien", SK: "Slowakei", PL: "Polen", SE: "Schweden", FI: "Finnland", BG: "Bulgarien", RO: "Rumänien", HR: "Kroatien", BE: "Belgien", NL: "Niederlande", DK: "Dänemark", GR: "Griechenland", IE: "Irland", HU: "Ungarn", LU: "Luxemburg", EE: "Estland", LV: "Lettland", LT: "Litauen", SVK: "Slowakei" };
+const PARKS_ALL = () => (window.PARKS || []);
+let parkFilter = { q: "", cc: "ALL" };
+let userPos = null;
+let curPark = -1;
+let addingTrail = false;
+// Schwierigkeit: offizielle Bikepark-Farbe (grün/blau/rot/schwarz), sonst aus der MTB-Skala abgeleitet
+const COL = { green: "s0", blue: "s1", red: "s2", orange: "s2", black: "s3", yellow: "s0" };
+const COL_NAME = { s0: "leicht", s1: "mittel", s2: "schwer", s3: "sehr schwer", sx: "" };
+const S_CLASS = (t) => (t.col && COL[t.col]) || (t.s === null || t.s === undefined ? "sx" : t.s <= 0 ? "s0" : t.s === 1 ? "s1" : t.s === 2 ? "s2" : "s3");
+const TYPE = { downhill: "DH", freeride: "FR", enduro: "EN", flow: "FL", dirt: "JL", jump: "JL", slopestyle: "SL", pump: "PT", gravity: "DH" };
+const S_LABEL = (t) => (t.ty && TYPE[t.ty.toLowerCase()]) || (t.s === null || t.s === undefined ? "–" : "S" + t.s);
+const trailsOf = (p) => ((settings.osm && settings.osm[p.n]) || p.t || []).concat((settings.custom[p.n] || []).map((t) => Object.assign({ custom: true }, t)));
+
+function renderChips() {
+  const ccs = [...new Set(PARKS_ALL().map((p) => p.c))];
+  const order = ["DE", "AT", "IT", "FR"];
+  ccs.sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || (COUNTRY[a] || a).localeCompare(COUNTRY[b] || b));
+  const chips = [["ALL", "Alle"], ["FAV", "★ Favoriten"]].concat(ccs.map((c) => [c, COUNTRY[c] || c]));
+  $("#country-chips").innerHTML = chips.map(([k, l]) =>
+    `<button class="chip ${parkFilter.cc === k ? "on" : ""}" data-cc="${k}" aria-pressed="${parkFilter.cc === k}">${esc(l)}</button>`).join("");
+  $("#country-chips").querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => { parkFilter.cc = b.dataset.cc; renderParks(); }));
+}
+function distKm(p) { return userPos && p.lat !== null ? haversine(userPos, { lat: p.lat, lon: p.lon }) / 1000 : null; }
+
+function renderParks() {
+  renderChips();
+  const q = parkFilter.q.toLowerCase();
+  let list = PARKS_ALL().map((p, i) => ({ p, i, d: distKm(p) }));
+  if (parkFilter.cc === "FAV") list = list.filter((x) => settings.favs.includes(x.p.n));
+  else if (parkFilter.cc !== "ALL") list = list.filter((x) => x.p.c === parkFilter.cc);
+  if (q) list = list.filter((x) => x.p.n.toLowerCase().includes(q) || trailsOf(x.p).some((t) => t.n.toLowerCase().includes(q)));
+  if (userPos) list.sort((a, b) => (a.d ?? 1e9) - (b.d ?? 1e9));
+  else list.sort((a, b) => (settings.favs.includes(b.p.n) - settings.favs.includes(a.p.n)) || a.p.n.localeCompare(b.p.n));
+  $("#park-count").textContent = PARKS_ALL().length + " Parks";
+  if (!list.length) {
+    $("#park-list").innerHTML = `<p class="empty">${parkFilter.cc === "FAV" ? "Noch keine Favoriten. Tippe im Park auf den Stern." : "Kein Park gefunden."}</p>`;
+    return;
+  }
+  $("#park-list").innerHTML = list.map(({ p, i, d }) => {
+    const n = trailsOf(p).length;
+    const fav = settings.favs.includes(p.n) ? '<span class="star" aria-label="Favorit">★</span> ' : "";
+    const hit = q && !p.n.toLowerCase().includes(q) ? trailsOf(p).filter((t) => t.n.toLowerCase().includes(q)).map((t) => t.n).slice(0, 2).join(", ") : "";
+    return `<button class="park" data-i="${i}">
+      <span class="cc">${esc(p.c)}</span>
+      <span class="meta"><span class="name">${fav}${esc(p.n)}</span>
+      <span class="lbl">${hit ? "Strecke: " + esc(hit) : (n ? n + (n === 1 ? " Strecke" : " Strecken") : "Strecken noch nicht erfasst")}${d !== null ? " · " + de(d, d < 10 ? 1 : 0) + " km" : ""}</span></span>
+      <svg viewBox="0 0 24 24" class="chev" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`;
+  }).join("");
+  $("#park-list").querySelectorAll(".park").forEach((b) => b.addEventListener("click", () => openPark(Number(b.dataset.i))));
+}
+$("#park-q").addEventListener("input", (e) => { parkFilter.q = e.target.value.trim(); renderParks(); });
+$("#btn-near").addEventListener("click", () => {
+  if (!("geolocation" in navigator)) return;
+  $("#btn-near").textContent = "Suche …";
+  navigator.geolocation.getCurrentPosition((p) => {
+    userPos = { lat: p.coords.latitude, lon: p.coords.longitude };
+    $("#btn-near").innerHTML = '<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/></svg>Nähe';
+    parkFilter.cc = "ALL";
+    renderParks();
+  }, () => {
+    $("#btn-near").innerHTML = '<svg viewBox="0 0 24 24" class="ico" aria-hidden="true"><path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/></svg>Nähe';
+    alert("Standort nicht verfügbar. Bitte Standortzugriff erlauben.");
+  }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+});
+
+function openPark(i) {
+  curPark = i; addingTrail = false;
+  const p = PARKS_ALL()[i];
+  if (!p) return;
+  show("park");
+  $("#park-h").textContent = p.n;
+  $("#park-sub").textContent = COUNTRY[p.c] || p.c;
+  const fav = settings.favs.includes(p.n);
+  $("#park-fav").setAttribute("aria-pressed", fav);
+  $("#park-fav").setAttribute("aria-label", fav ? "Favorit entfernen" : "Als Favorit merken");
+  const map = $("#park-map");
+  if (p.lat !== null) { map.href = `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lon}#map=13/${p.lat}/${p.lon}`; map.hidden = false; }
+  else map.hidden = true;
+  renderTrails();
+}
+function renderTrails() {
+  const p = PARKS_ALL()[curPark];
+  const ts = trailsOf(p);
+  const s = settings.sel;
+  let html = "";
+  if (addingTrail) {
+    html += `<form id="add-form" class="card col gap8">
+      <label class="mini">Name der Strecke<input id="add-name" required maxlength="60" autocomplete="off"></label>
+      <label class="mini">Schwierigkeit<select id="add-s"><option value="">unbekannt</option><option value="0">Grün · leicht</option><option value="1">Blau · mittel</option><option value="2">Rot · schwer</option><option value="3">Schwarz · sehr schwer</option></select></label>
+      <div class="row gap8"><button type="button" id="add-cancel" class="btn ghost flex1">Abbrechen</button><button class="btn primary flex1">Hinzufügen</button></div>
+    </form>`;
+  }
+  if (!ts.length) html += `<p class="empty">Für diesen Park sind noch keine Strecken in OpenStreetMap erfasst. Leg deine Strecken mit „+ Eigene Strecke“ an.</p>`;
+  const upd = settings.osmAt && settings.osmAt[p.n];
+  const tail = p.lat !== null ? `<button id="osm-refresh" class="more">Strecken aus OpenStreetMap aktualisieren</button>
+    <p class="hint small">${upd ? "Zuletzt aktualisiert: " + new Date(upd).toLocaleDateString("de-DE") + ". " : ""}Lädt alle in OpenStreetMap eingetragenen Bike-Strecken im Umkreis von 6 km neu.</p>` : "";
+  html += ts.map((t, k) => {
+    const key = p.n + " · " + t.n;
+    const b = bestFor(key);
+    const cnt = runs.filter((r) => r.trail === key).length;
+    const isSel = s && s.park === p.n && s.trail === t.n;
+    const cls = S_CLASS(t);
+    const meta = [COL_NAME[cls], t.s !== null && t.s !== undefined && t.ty ? "S" + t.s : "", t.l ? de(t.l / 1000, t.l < 10000 ? 1 : 0) + " km" : "", t.custom ? "eigene" : "", b ? "PB " + fmtTime(b.dur) : "", cnt ? cnt + (cnt === 1 ? " Lauf" : " Läufe") : ""].filter(Boolean).join(" · ");
+    return `<div class="trail ${isSel ? "sel" : ""}">
+      <span class="sbadge ${cls}" title="Schwierigkeit: ${COL_NAME[cls] || "unbekannt"}">${S_LABEL(t)}</span>
+      <span class="meta"><span class="name">${esc(t.n)}</span><span class="lbl">${meta || "&nbsp;"}</span></span>
+      <button class="pick-btn" data-k="${k}">${isSel ? "Gewählt" : "Wählen"}</button></div>`;
+  }).join("") + tail;
+  $("#trail-list").innerHTML = html;
+  const rb = $("#osm-refresh");
+  if (rb) rb.addEventListener("click", () => refreshOsm(p, rb));
+  $("#trail-list").querySelectorAll(".pick-btn").forEach((b) => b.addEventListener("click", () => {
+    const t = ts[Number(b.dataset.k)];
+    settings.sel = { park: p.n, trail: t.n };
+    saveSettings(); renderSel(); show("live");
+  }));
+  const f = $("#add-form");
+  if (f) {
+    $("#add-name").focus();
+    $("#add-cancel").addEventListener("click", () => { addingTrail = false; renderTrails(); });
+    f.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const n = $("#add-name").value.trim(); if (!n) return;
+      const sv = $("#add-s").value;
+      (settings.custom[p.n] = settings.custom[p.n] || []).push({ n, s: sv === "" ? null : Number(sv), l: 0 });
+      saveSettings(); addingTrail = false; renderTrails();
+    });
+  }
+}
+// Strecken live aus OpenStreetMap (Overpass) nachladen
+const OVERPASS = ["https://overpass.openstreetmap.fr/api/interpreter", "https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+async function refreshOsm(p, btn) {
+  if (!navigator.onLine) { alert("Keine Internetverbindung."); return; }
+  btn.disabled = true; btn.textContent = "Lade Strecken … (bis zu 1 Minute)";
+  const q = `[out:json][timeout:60];
+way(around:5000,${p.lat},${p.lon})["highway"~"^(path|track)$"]["name"]["piste:type"!~"."]->.w;
+(way.w["highway"="path"]["bicycle"="designated"]; way.w["highway"="path"]["mtb"~"^(yes|designated)$"]; way.w["mtb:type"]; way.w["highway"="path"]["mtb:scale"]["foot"="no"]; way.w["name"~"line|trail|downhill|freeride|flow|gravity|enduro|fourcross|4x|dual|jump|slope|bikepark|bike park",i];);
+out tags geom;`;
+  let j = null;
+  for (const u of OVERPASS) {
+    try {
+      const c = new AbortController(); const t = setTimeout(() => c.abort(), 60000);
+      const r = await fetch(u, { method: "POST", body: "data=" + encodeURIComponent(q), signal: c.signal });
+      clearTimeout(t);
+      if (r.ok) { j = await r.json(); break; }
+    } catch (e) { /* nächster Server */ }
+  }
+  if (!j) { btn.disabled = false; btn.textContent = "Server ausgelastet – nochmal versuchen"; return; }
+  const g = {};
+  for (const e of j.elements || []) {
+    const tg = e.tags || {}, gm = e.geometry || [];
+    let len = 0;
+    for (let k = 1; k < gm.length; k++) len += haversine(gm[k - 1], gm[k]);
+    const key = tg.name.trim();
+    const sc = parseInt(tg["mtb:scale"]);
+    if (!g[key]) g[key] = { n: key, s: null, l: 0, d: 1e9 };
+    g[key].l += len;
+    if (!isNaN(sc)) g[key].s = Math.max(g[key].s ?? -1, sc);
+    if (gm.length) { const m = gm[Math.floor(gm.length / 2)]; g[key].d = Math.min(g[key].d, haversine(p, m)); }
+  }
+  const list = Object.values(g).filter((x) => x.l >= 150).sort((a, b) => a.d - b.d).slice(0, 45)
+    .map((x) => ({ n: x.n, s: x.s, l: Math.round(x.l) }));
+  settings.osm = settings.osm || {}; settings.osmAt = settings.osmAt || {};
+  settings.osm[p.n] = list; settings.osmAt[p.n] = Date.now();
+  saveSettings(); renderTrails();
+}
+$("#park-back").addEventListener("click", () => show("parks"));
+$("#park-add").addEventListener("click", () => { addingTrail = true; renderTrails(); });
+$("#park-fav").addEventListener("click", () => {
+  const p = PARKS_ALL()[curPark]; if (!p) return;
+  const i = settings.favs.indexOf(p.n);
+  if (i >= 0) settings.favs.splice(i, 1); else settings.favs.push(p.n);
+  saveSettings(); openPark(curPark);
+});
+
 // ---------- Start ----------
-fillTrailList();
-updateBest();
+renderSel();
 setPart("fork");
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
