@@ -106,10 +106,10 @@ window.Crew = (() => {
 
   // ---------- Abfrage ----------
   let lastPoll = 0;
-  async function poll() {
+  async function poll(force) {
     if (!me) return;
     // im Hintergrund seltener abfragen (Akku), aber nicht ganz aufhören
-    if (document.visibilityState !== "visible" && Date.now() - lastPoll < 15000) return;
+    if (!force && document.visibilityState !== "visible" && Date.now() - lastPoll < 15000) return;
     lastPoll = Date.now();
     try {
       state = await rpc("crew_state", auth());
@@ -344,7 +344,7 @@ window.Crew = (() => {
       await rpc("crew_meet", Object.assign(auth(), { p_lat: pos ? pos.lat : null, p_lon: pos ? pos.lon : null, p_note: pos && note ? note.slice(0, 80) : null }));
       if (pos) fitted = false;
       meetOpen = false;
-      await poll();
+      await poll(true);
       renderMeet();
     } catch (e) { alert(friendly(e)); }
   }
