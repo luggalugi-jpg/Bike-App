@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Gravity</string>
+    <string name="title_activity_main">Gravity</string>
+    <string name="package_name">de.preikschas.downhill</string>
+    <string name="custom_url_scheme">de.preikschas.downhill</string>
+</resources>

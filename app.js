@@ -129,11 +129,11 @@ async function prepareSensors() {
   return true;
 }
 function startGps() {
-  if (watchId === null) watchId = navigator.geolocation.watchPosition(onFix, onGpsError, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+  if (watchId === null) watchId = Native.watchPosition(onFix, onGpsError, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }, "Gravity zeichnet deinen Lauf auf.");
   requestWakeLock();
 }
 function stopGps() {
-  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  if (watchId !== null) Native.clearWatch(watchId);
   watchId = null;
   releaseWakeLock();
 }
@@ -169,11 +169,26 @@ function beginRun(t0) {
   renderButtons();
   renderLive();
   if (navigator.vibrate) navigator.vibrate(150);
+  startGuard();
+}
+// In der Android-App übernimmt ein eigener Dienst die Sturzerkennung – auch bei gesperrtem Bildschirm.
+function guardOpts() {
+  const me = window.Crew && Crew.me, srv = window.Crew && Crew.server;
+  return {
+    thresholdG: settings.crashG, countdown: 30, trail: run.trail || "",
+    url: me && srv ? srv.url : "", key: me && srv ? srv.key : "",
+    member: me ? me.member : "", secret: me ? me.secret : "",
+    baseStatus: window.Crew && Crew.baseStatus ? Crew.baseStatus() : "off"
+  };
+}
+function startGuard() {
+  if (Native.isNative && settings.crashOn) Native.guardStart(guardOpts());
 }
 function finishRun(t1) {
   if (!run.active) return;
   run.active = false;
   clearInterval(timerId);
+  Native.guardStop();
   if (!run.armed) stopGps();
   $("#speed").textContent = "0";
   renderButtons();
@@ -356,7 +371,7 @@ function onMotion(e) {
   }
 
   // Sturz: harter Aufprall, danach Stillstand
-  if (!settings.crashOn || alarm.on) return;
+  if (!settings.crashOn || alarm.on || Native.guardActive) return;
   if (mag > settings.crashG * G) { m.impactAt = now; m.stillSince = 0; return; }
   if (m.impactAt) {
     const since = now - m.impactAt;
@@ -394,9 +409,10 @@ function smsHref() {
   const text = `Notfall: Ich bin beim Downhill vermutlich gestürzt und habe nicht reagiert.${trail} Mein letzter Standort: ${pos}`;
   return `sms:${(settings.cPhone || "").replace(/\s/g, "")}?&body=${encodeURIComponent(text)}`;
 }
-function startAlarm(test) {
+function startAlarm(test, fromNative) {
+  if (alarm.on) return;
   unlockAudio();
-  alarm.on = true; alarm.left = 30; alarm.test = !!test;
+  alarm.on = true; alarm.left = 30; alarm.test = !!test; alarm.native = !!fromNative;
   if (!alarm.test && window.Crew) Crew.alarm("alarm");
   $("#alarm-count").textContent = alarm.left;
   $("#btn-sms").href = smsHref();
@@ -420,7 +436,9 @@ function startAlarm(test) {
   tick();
   alarm.timer = setInterval(tick, 1000);
 }
-function stopAlarm() {
+function stopAlarm(fromNative) {
+  if (!alarm.on) return;
+  if (alarm.native && fromNative !== true) Native.guardOk();
   alarm.on = false;
   clearInterval(alarm.timer);
   if (navigator.vibrate) navigator.vibrate(0);
@@ -429,7 +447,12 @@ function stopAlarm() {
   resetMotion();
   if (!alarm.test && window.Crew) Crew.alarm(null);
 }
-$("#btn-ok").addEventListener("click", stopAlarm);
+$("#btn-ok").addEventListener("click", () => stopAlarm());
+Native.onGuard((ev) => {
+  if (ev.type === "alarm") startAlarm(false, true);
+  else if (ev.type === "tick" && alarm.on && alarm.native) { alarm.left = Math.min(alarm.left, ev.left); $("#alarm-count").textContent = alarm.left; }
+  else if (ev.type === "ok") stopAlarm(true);
+});
 $("#btn-test").addEventListener("click", () => { unlockAudio(); startAlarm(true); });
 
 // ---------- Läufe ----------

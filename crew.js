@@ -80,7 +80,7 @@ window.Crew = (() => {
   }
   function startShareWatch() {
     if (shareWatch !== null || !("geolocation" in navigator)) return;
-    shareWatch = navigator.geolocation.watchPosition((p) => {
+    shareWatch = Native.watchPosition((p) => {
       const c = p.coords;
       const f = { lat: c.latitude, lon: c.longitude, t: p.timestamp, acc: c.accuracy };
       lastFix = f;
@@ -88,10 +88,10 @@ window.Crew = (() => {
       fix(f, run.active ? run.speed : sp);
     }, () => {
       $("#crew-share-hint").textContent = "Standort nicht verfügbar – bitte Standortzugriff erlauben.";
-    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }, "Deine Position wird mit deiner Crew geteilt.");
   }
   function stopShareWatch() {
-    if (shareWatch !== null) navigator.geolocation.clearWatch(shareWatch);
+    if (shareWatch !== null) Native.clearWatch(shareWatch);
     shareWatch = null;
   }
 
@@ -430,5 +430,5 @@ window.Crew = (() => {
   render();
   if (me) { startPolling(); if (settings.crewShare) startShareWatch(); push(true); }
 
-  return { fix, alarm: setAlarm, onShow, push, get me() { return me; } };
+  return { fix, alarm: setAlarm, onShow, push, get me() { return me; }, server: { url: URL_, key: KEY }, baseStatus: () => { const a = alarmStatus; alarmStatus = null; const s = myStatus(); alarmStatus = a; return s; } };
 })();
