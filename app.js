@@ -306,6 +306,10 @@ function renderSectors() {
   const ref = run.active ? run.ref : refFor(selKey());
   if (!ref || !ref.bestSectors) { box.hidden = true; return; }
   box.hidden = false;
+  if (window.Pro && !Pro.has()) {
+    box.innerHTML = `<button class="row between pro-card" style="margin:0;background:none;padding:0" onclick="Pro.open('sectors')"><span class="strong">Sektoren vs. Bestzeit ${Pro.tag()}</span><span aria-hidden="true">›</span></button>`;
+    return;
+  }
   const best = ref.bestSectors;
   const mine = run.active ? run.sectors : [];
   const rows = [0, 1, 2].map((i) => {
@@ -501,10 +505,11 @@ function openDetail(r, gain) {
   $("#detail-body").innerHTML = head + `<div class="grid3" style="margin-top:12px">
     ${stat("Zeit", fmtTime(r.dur))}${stat("Vmax", Math.round(r.vmax) + " km/h")}${stat("Tiefenmeter", r.drop + " m")}
     ${stat("Strecke", de(r.dist / 1000, 2) + " km")}${stat("Airtime", de(r.air, 1) + " s")}${stat("Sprünge", r.jumps)}
-  </div>${r.sectors ? `<div class="card col gap8" style="margin-top:12px"><span class="strong">Sektoren</span>${r.sectors.map((t, i) =>
+  </div>${r.sectors && (!window.Pro || Pro.has()) ? `<div class="card col gap8" style="margin-top:12px"><span class="strong">Sektoren</span>${r.sectors.map((t, i) =>
     `<div class="row between sec"><span class="lbl">Sektor ${i + 1}</span><span>${fmtTime(t - (i ? r.sectors[i - 1] : 0))}</span></div>`).join("")}</div>` : ""}
   <p class="hint small" style="margin-top:10px">${new Date(r.start).toLocaleString("de-DE")}${r.track ? "" : " · ohne GPS-Spur"}</p>`;
   $("#detail-rank").hidden = !r.park;
+  $("#detail-gpx").hidden = !r.track;
   $("#detail").hidden = false;
   $("#detail-close").focus();
   drawTrack(r);
@@ -541,7 +546,8 @@ async function drawTrack(r) {
   // Linie nach Tempo eingefärbt: langsam blau → schnell lime
   const vmax = Math.max(10, ...r.track.map((p) => p[3] || 0));
   const segs = [];
-  for (let i = 1; i < r.track.length; i++) {
+  if (window.Pro && !Pro.has()) segs.push(L.polyline(r.track.map((p) => [p[0], p[1]]), { color: "#C6FF3D", weight: 5, opacity: 0.95 }));
+  else for (let i = 1; i < r.track.length; i++) {
     const a = r.track[i - 1], b = r.track[i];
     const f = Math.min(1, (b[3] || 0) / vmax);
     const col = `hsl(${Math.round(215 - f * 140)}, 90%, ${Math.round(55 + f * 10)}%)`;
@@ -563,6 +569,7 @@ $("#detail-del").addEventListener("click", () => {
   if (window.Account) Account.runDeleted(detailRun.id);
   $("#detail").hidden = true;
 });
+$("#detail-gpx").addEventListener("click", () => { if (detailRun) Pro.gpx(detailRun); });
 $("#detail-share").addEventListener("click", async () => {
   const r = detailRun; if (!r) return;
   const text = `${r.trail}: ${fmtTime(r.dur)} · Vmax ${Math.round(r.vmax)} km/h · ${r.jumps} Sprünge, ${de(r.air, 1)} s Airtime 🤘`;

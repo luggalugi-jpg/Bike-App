@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="app.css?v=7">
+<link rel="stylesheet" href="app.css?v=8">
 </head>
 <body>
 <main id="app">
@@ -97,6 +97,7 @@
   <section id="view-runs" class="view" aria-labelledby="h-runs">
     <header class="top"><h1 id="h-runs" class="title">Läufe</h1></header>
     <div id="account-card"></div>
+    <div id="pro-card"></div>
     <div id="bests"></div>
     <h2 class="h2">Verlauf</h2>
     <div id="run-list" class="list"></div>
@@ -293,6 +294,17 @@
   </div>
 </div>
 
+<!-- Pro -->
+<div id="pro" class="overlay sheet" hidden role="dialog" aria-labelledby="pro-h">
+  <div class="sheet-box">
+    <div class="row between">
+      <div class="col"><span class="eyebrow">Abo</span><h2 id="pro-h" class="title small-title">Gravity Pro</h2></div>
+      <button id="pro-close" class="icon-btn" aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div id="pro-body" class="col gap12"></div>
+  </div>
+</div>
+
 <!-- Lauf-Detail -->
 <div id="detail" class="overlay sheet" hidden role="dialog" aria-labelledby="detail-h">
   <div class="sheet-box">
@@ -305,6 +317,7 @@
     <button id="detail-rank" class="btn ghost">Rangliste dieser Strecke</button>
     <div class="row gap8">
       <button id="detail-share" class="btn ghost flex1">Teilen</button>
+      <button id="detail-gpx" class="btn ghost flex1">GPX <span class="pro-tag">PRO</span></button>
       <button id="detail-del" class="btn ghost flex1 danger-text">Löschen</button>
     </div>
   </div>
@@ -313,7 +326,8 @@
 <script src="build-config.js" onerror="void 0"></script>
 <script src="native.js?v=1"></script>
 <script src="parks.js?v=6"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
+<script src="pro.js?v=1"></script>
 <script src="crew.js?v=10"></script>
 <script src="account.js?v=6"></script>
 </body>
